@@ -8,7 +8,7 @@ MY_STREAM = os.getenv("MY_STREAM")
 
 
 async def consumer():
-    with S2(auth_token=AUTH_TOKEN) as s2:
+    async with S2(auth_token=AUTH_TOKEN) as s2:
         stream = s2[MY_BASIN][MY_STREAM]
         start_seq_num = await stream.check_tail()
         print(f"reading from seq_num: {start_seq_num}")

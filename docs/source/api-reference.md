@@ -33,7 +33,7 @@ Metered bytes
     .. code-block:: python
 
         metered_bytes = lambda record: 8 + 2 * len(record.headers) \
-            + sum((len(h.key) + len(h.value)) for h in record.headers) \
+            + sum((len(name) + len(value)) for (name, value) in record.headers) \
             + len(record.body)
 
 ```

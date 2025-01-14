@@ -24,7 +24,7 @@ async def append_inputs():
 
 
 async def producer():
-    with S2(auth_token=AUTH_TOKEN) as s2:
+    async with S2(auth_token=AUTH_TOKEN) as s2:
         stream = s2[MY_BASIN][MY_STREAM]
         async for output in stream.append_session(append_inputs()):
             num_appended_records = output.end_seq_num - output.start_seq_num

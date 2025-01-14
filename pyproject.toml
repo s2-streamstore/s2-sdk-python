@@ -5,8 +5,11 @@ description = "Python SDK for S2, the Stream Store"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "betterproto[compiler]>=2.0.0b7",
+    "grpcio-tools>=1.69.0",
+    "grpcio>=1.69.0",
     "stamina>=24.3.0",
+    "types-protobuf>=5.29.1.20241207",
+    "grpc-stubs>=1.53.0.5",
 ]
 
 [project.optional-dependencies]

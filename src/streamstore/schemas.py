@@ -205,6 +205,7 @@ class StorageClass(DocEnum):
     Storage class for recent appends.
     """
 
+    UNSPECIFIED = 0, "``UNSPECIFIED`` gets overridden to ``EXPRESS``."
     STANDARD = 1, "Offers end-to-end latencies under 500 ms."
     EXPRESS = 2, "Offers end-to-end latencies under 50 ms."
 
