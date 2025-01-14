@@ -24,16 +24,4 @@
     :members:
     :exclude-members: Record
     :member-order: bysource
-
-.. _metered-bytes:
-
-Metered bytes
-=============
-
-    .. code-block:: python
-
-        metered_bytes = lambda record: 8 + 2 * len(record.headers) \
-            + sum((len(name) + len(value)) for (name, value) in record.headers) \
-            + len(record.body)
-
 ```

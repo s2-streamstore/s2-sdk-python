@@ -774,7 +774,7 @@ class Stream:
                 preceeding records in the stream.
 
         Note:
-            This is a helper method, which creates a trim command record via :meth:`.CommandRecord.fence`
+            This is a helper method, which creates a trim command record via :meth:`.CommandRecord.trim`
             and passes it as the input to :meth:`.Stream.append`.
 
             Trimming is eventually consistent, and trimmed records may be visible for a brief period.
@@ -815,7 +815,7 @@ class Stream:
 
         Args:
             start_seq_num: Starting sequence number (inclusive).
-            limit: Number of records to return, upto a maximum of 1000 or 1MiB of :ref:`metered bytes <metered-bytes>`.
+            limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
             ignore_command_records: Filters out command records if present from the batch.
 
         Returns:
@@ -876,7 +876,7 @@ class Stream:
 
         Args:
             start_seq_num: Starting sequence number (inclusive).
-            limit: Number of records to return, upto a maximum of 1000 or 1MiB of :ref:`metered bytes <metered-bytes>`.
+            limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
             ignore_command_records: Filters out command records if present from the batch.
 
         Yields:

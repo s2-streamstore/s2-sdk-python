@@ -1,8 +1,3 @@
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Generic, TypeVar
-
 __all__ = [
     "Record",
     "CommandRecord",
@@ -20,9 +15,19 @@ __all__ = [
     "StreamConfig",
     "BasinConfig",
     "Cloud",
+    "metered_bytes",
 ]
 
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Generic, Iterable, TypeVar
+
+from streamstore._exceptions import S2Error
+
 T = TypeVar("T")
+
+_ONE_MIB = 1024 * 1024
 
 
 class DocEnum(Enum):
@@ -81,12 +86,21 @@ class AppendInput:
     """
 
     #: Batch of records to append atomically, which must contain at least one record,
-    #: and no more than 1000. The total size of the batch must not exceed 1MiB of :ref:`metered bytes <metered-bytes>`.
+    #: and no more than 1000. The total size of the batch must not exceed 1MiB of :func:`.metered_bytes`.
     records: list[Record]
     #: Enforce that the sequence number issued to the first record in the batch matches this value.
     match_seq_num: int | None = None
     #: Enforce a fencing token, which must have been previously set by a ``fence`` command record.
     fencing_token: bytes | None = None
+
+    def __post_init__(self):
+        num_bytes = metered_bytes(self.records)
+        num_records = len(self.records)
+        if 1 <= num_records <= 1000 and num_bytes <= _ONE_MIB:
+            return
+        raise S2Error(
+            f"Invalid append input: num_records={num_records}, metered_bytes={num_bytes}"
+        )
 
 
 @dataclass(slots=True)
@@ -119,7 +133,7 @@ class ReadLimit:
 
     #: Number of records.
     count: int | None = None
-    #: Cumulative size of records. Record sizes are calculated as :ref:`metered bytes <metered-bytes>`.
+    #: Cumulative size of records calculated using :func:`.metered_bytes`.
     bytes: int | None = None
 
 
@@ -238,3 +252,25 @@ class Cloud(DocEnum):
     """
 
     AWS = 1
+
+
+def metered_bytes(records: Iterable[Record | SequencedRecord]) -> int:
+    """
+    Each record is metered using the following formula:
+
+    .. code-block:: python
+
+        8 + 2 * len(headers)
+        + sum((len(name) + len(value)) for (name, value) in headers)
+        + len(body)
+
+    """
+    return sum(
+        (
+            8
+            + 2 * len(record.headers)
+            + sum((len(name) + len(value)) for (name, value) in record.headers)
+            + len(record.body)
+        )
+        for record in records
+    )
