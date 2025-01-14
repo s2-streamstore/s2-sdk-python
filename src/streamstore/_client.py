@@ -2,14 +2,14 @@ import re
 import uuid
 from collections import deque
 from collections.abc import AsyncIterable, Iterable
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Self, TypedDict, cast
-from dataclasses import dataclass
 
 import stamina
-from grpc import ssl_channel_credentials, StatusCode
-from grpc.aio import Channel, secure_channel, AioRpcError
 from google.protobuf.field_mask_pb2 import FieldMask
+from grpc import StatusCode, ssl_channel_credentials
+from grpc.aio import AioRpcError, Channel, secure_channel
 
 from streamstore import schemas
 from streamstore._exceptions import fallible
@@ -43,13 +43,13 @@ from streamstore._mappers import (
     append_input_message,
     append_output_schema,
     append_record_message,
-    basin_config_schema,
     basin_config_message,
+    basin_config_schema,
+    basin_info_schema,
     read_limit_message,
     sequenced_records_schema,
     stream_config_message,
     stream_config_schema,
-    basin_info_schema,
     stream_info_schema,
 )
 
@@ -133,10 +133,10 @@ class _Config:
 
 class S2:
     """
-    Async client for interacting with gRPC API of S2.
+    Async client for interacting with gRPC API of `S2 <https://s2.dev/>`_.
 
     Args:
-        auth_token: Authentication token generated from S2 dashboard.
+        auth_token: Authentication token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
         request_timeout: Timeout for gRPC requests made by the client. Default value is 5 seconds.
         max_retries: Maximum number of retries for a gRPC request. Default value is 3.
         retries_timeout: Maximum total time for all retries of a gRPC request. Default value is 10 seconds.

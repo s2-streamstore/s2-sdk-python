@@ -1,20 +1,21 @@
-import streamstore._lib.s2.v1alpha.s2_pb2 as msgs
 from datetime import datetime, timedelta
-from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
-from google.protobuf.field_mask_pb2 import FieldMask
 
+from google.protobuf.field_mask_pb2 import FieldMask
+from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
+
+import streamstore._lib.s2.v1alpha.s2_pb2 as msgs
 from streamstore.schemas import (
-    StreamConfig,
-    StorageClass,
-    BasinConfig,
-    AppendOutput,
-    SequencedRecord,
-    Record,
     AppendInput,
-    ReadLimit,
+    AppendOutput,
+    BasinConfig,
     BasinInfo,
-    StreamInfo,
     BasinState,
+    ReadLimit,
+    Record,
+    SequencedRecord,
+    StorageClass,
+    StreamConfig,
+    StreamInfo,
 )
 
 
