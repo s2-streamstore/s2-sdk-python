@@ -28,6 +28,12 @@
 
 `streamstore` is the Python package that provides an async client for interacting with the [gRPC API](https://s2.dev/docs/interface/grpc) of [S2, the Stream Store](https://s2.dev/).
 
+## Project Links
+
+- [PyPI](https://pypi.org/project/streamstore/)
+- [Documentation](https://streamstore.readthedocs.io/)
+- [GitHub](https://github.com/s2-streamstore/s2-sdk-python)
+
 ## Requirements
 
 Python >= 3.11
@@ -40,13 +46,9 @@ You can install the package from the [Python Package Index](https://pypi.org/pro
 pip install streamstore
 ```
 
-## Documentation
-
-API Reference is available at [streamstore.readthedocs.io](https://streamstore.readthedocs.io/).
-
 ## Examples
 
-`examples/` directory in the repo contain examples for streaming APIs.
+`examples/streaming` directory in the [repo](https://github.com/s2-streamstore/s2-sdk-python/tree/main/examples/streaming) contain examples for streaming APIs.
 
 ## Get in touch
 
