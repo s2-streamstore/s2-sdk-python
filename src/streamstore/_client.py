@@ -143,10 +143,6 @@ class S2:
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
         cloud: Cloud in which the S2 service runs. Currently, only AWS is supported.
-
-    Caution:
-        Enabling retries for appends could lead to duplicate records in the stream. There can be
-        cases where such a behavior is undesirable. You can disable it if you have such a case.
     """
 
     __slots__ = (
