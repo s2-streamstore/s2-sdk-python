@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [0.2.0] - 2025-01-17
+
+### Bug Fixes
+
+- Limits in read session resumption  ([#14](https://github.com/s2-streamstore/s2-sdk-python/issues/14))
 
 ### Documentation
 
