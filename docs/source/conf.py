@@ -22,6 +22,7 @@ extensions = [
     "sphinx.ext.autodoc.typehints",
     "sphinx.ext.intersphinx",
     "enum_tools.autoenum",
+    "sphinx.ext.viewcode",
 ]
 
 templates_path = ["_templates"]
@@ -34,3 +35,7 @@ intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 
 html_theme = "furo"
 html_static_path = ["_static"]
+html_theme_options = {
+    "light_logo": "s2-logo-black.png",
+    "dark_logo": "s2-logo-white.png",
+}

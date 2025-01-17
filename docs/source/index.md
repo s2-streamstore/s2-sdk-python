@@ -1,5 +1,4 @@
 ```{include} ../../README.md
-:start-after: "<!-- start docs index -->"
 ```
 
 ```{toctree}
