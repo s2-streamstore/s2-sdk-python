@@ -114,6 +114,20 @@ def _basin_service_endpoint(cloud: schemas.Cloud, basin: str) -> str:
             return ValueError(f"Invalid cloud: {cloud}")
 
 
+def _prepare_read_session_request_for_retry(
+    request: ReadSessionRequest, last_read_batch: list[schemas.SequencedRecord]
+) -> None:
+    if len(last_read_batch) > 0:
+        request.start_seq_num = last_read_batch[-1].seq_num
+        if request.limit.count is not None and request.limit.count != 0:
+            request.limit.count = max(request.limit.count - len(last_read_batch), 0)
+        if request.limit.bytes is not None and request.limit.bytes != 0:
+            request.limit.bytes = max(
+                request.limit.bytes - schemas.metered_bytes(last_read_batch),
+                0,
+            )
+
+
 class _StubKwargs(TypedDict):
     timeout: float
     metadata: list[tuple[str, str]]
@@ -875,6 +889,11 @@ class Stream:
             limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
             ignore_command_records: Filters out command records if present from the batch.
 
+        Note:
+            With a session, you are able to read in a streaming fashion. If a **limit** was not provided
+            and the end of the stream is reached, the session goes into real-time tailing mode and
+            will yield records as they are appended to the stream.
+
         Yields:
             Batch of sequenced records. It can be empty only if **limit** was provided,
             and the first record that could have been returned violated the limit.
@@ -890,6 +909,11 @@ class Stream:
             **start_seq_num** was larger.
 
         Returns:
+            If **limit** was provided, and if it was met or the end of the stream was reached
+            before meeting it.
+
+            (or)
+
             If previous yield was not a batch of sequenced records.
         """
         request = ReadSessionRequest(
@@ -908,8 +932,7 @@ class Stream:
                             records = sequenced_records_schema(
                                 output.batch, ignore_command_records
                             )
-                            if len(records) > 0:
-                                request.start_seq_num = records[-1].seq_num
+                            _prepare_read_session_request_for_retry(request, records)
                             yield records
                         case "first_seq_num":
                             yield schemas.FirstSeqNum(output.first_seq_num)
