@@ -14,7 +14,6 @@ from grpc.aio import AioRpcError, Channel, secure_channel
 from streamstore import schemas
 from streamstore._exceptions import fallible
 from streamstore._lib.s2.v1alpha.s2_pb2 import (
-    AppendInput,
     AppendRequest,
     AppendSessionRequest,
     BasinConfig,
@@ -757,22 +756,10 @@ class Stream:
             This is a helper method, which creates a fence command record via :meth:`.CommandRecord.fence`
             and passes it as the input to :meth:`.Stream.append`.
         """
-        request = AppendRequest(
-            input=AppendInput(
-                stream=self.name,
-                records=[append_record_message(schemas.CommandRecord.fence(token))],
-            )
+        input = schemas.AppendInput(
+            records=[schemas.CommandRecord.fence(token)],
         )
-        await self._retrying_caller(
-            self._stub.Append,
-            request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
-        ) if self._config.enable_append_retries else await self._stub.Append(
-            request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
-        )
+        await self.append(input)
 
     @fallible
     async def trim(self, desired_first_seq_num: int) -> None:
@@ -792,26 +779,10 @@ class Stream:
             If **desired_first_seq_num** was smaller than the sequence number for the first existing
             record in the stream, trimming doesn't happen.
         """
-        request = AppendRequest(
-            input=AppendInput(
-                stream=self.name,
-                records=[
-                    append_record_message(
-                        schemas.CommandRecord.trim(desired_first_seq_num)
-                    )
-                ],
-            )
+        input = schemas.AppendInput(
+            records=[schemas.CommandRecord.trim(desired_first_seq_num)],
         )
-        await self._retrying_caller(
-            self._stub.Append,
-            request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
-        ) if self._config.enable_append_retries else await self._stub.Append(
-            request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
-        )
+        await self.append(input)
 
     @fallible
     async def read(
