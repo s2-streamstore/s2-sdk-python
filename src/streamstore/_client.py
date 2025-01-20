@@ -41,7 +41,6 @@ from streamstore._lib.s2.v1alpha.s2_pb2_grpc import (
 from streamstore._mappers import (
     append_input_message,
     append_output_schema,
-    append_record_message,
     basin_config_message,
     basin_config_schema,
     basin_info_schema,
@@ -743,46 +742,6 @@ class Stream:
                 metadata=self._config.stub_kwargs["metadata"],
             ):
                 yield append_output_schema(response.output)
-
-    @fallible
-    async def fence(self, token: bytes) -> None:
-        """
-        Fence off appends to a stream by setting a fencing token.
-
-        Args:
-            token: Fencing token. Cannot exceed 16 bytes. If empty, clears the previously set token.
-
-        Note:
-            This is a helper method, which creates a fence command record via :meth:`.CommandRecord.fence`
-            and passes it as the input to :meth:`.Stream.append`.
-        """
-        input = schemas.AppendInput(
-            records=[schemas.CommandRecord.fence(token)],
-        )
-        await self.append(input)
-
-    @fallible
-    async def trim(self, desired_first_seq_num: int) -> None:
-        """
-        Explicitly trim records in a stream.
-
-        Args:
-            desired_first_seq_num: Sequence number for the first record to exist after trimming
-                preceeding records in the stream.
-
-        Note:
-            This is a helper method, which creates a trim command record via :meth:`.CommandRecord.trim`
-            and passes it as the input to :meth:`.Stream.append`.
-
-            Trimming is eventually consistent, and trimmed records may be visible for a brief period.
-
-            If **desired_first_seq_num** was smaller than the sequence number for the first existing
-            record in the stream, trimming doesn't happen.
-        """
-        input = schemas.AppendInput(
-            records=[schemas.CommandRecord.trim(desired_first_seq_num)],
-        )
-        await self.append(input)
 
     @fallible
     async def read(
