@@ -17,6 +17,8 @@ def fallible(f):
         try:
             return f(*args, **kwargs)
         except Exception as e:
+            if isinstance(e, S2Error):
+                raise e
             raise S2Error(e) from e
 
     @wraps(f)
@@ -25,6 +27,8 @@ def fallible(f):
             async for val in f(*args, **kwargs):
                 yield val
         except Exception as e:
+            if isinstance(e, S2Error):
+                raise e
             raise S2Error(e) from e
 
     @wraps(f)
@@ -32,6 +36,8 @@ def fallible(f):
         try:
             return await f(*args, **kwargs)
         except Exception as e:
+            if isinstance(e, S2Error):
+                raise e
             raise S2Error(e) from e
 
     if iscoroutinefunction(f):
