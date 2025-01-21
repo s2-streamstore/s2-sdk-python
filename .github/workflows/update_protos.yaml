@@ -12,7 +12,7 @@ on:
       - update_protos
 
 jobs:
-  generate-docs:
+  generate-protos:
     runs-on: ubuntu-latest
 
     steps:
@@ -32,6 +32,8 @@ jobs:
         with:
           version: "0.5.20"
       - uses: astral-sh/ruff-action@v3
+        with:
+         src: src/streamstore/_lib
       - name: Build package
         run: uv build
       - name: build protos
