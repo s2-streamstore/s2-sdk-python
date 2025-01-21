@@ -163,7 +163,7 @@ class S2:
         auth_token: Authentication token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
         request_timeout: Timeout for gRPC requests made by the client. Default value is 5 seconds.
         max_retries: Maximum number of retries for a gRPC request. Default value is 3.
-        retries_timeout: Maximum total time for all retries of a gRPC request. Default value is 10 seconds.
+        retries_timeout: Maximum total duration for all retries of a gRPC request. Default value is 10 seconds.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
         cloud: Cloud in which the S2 service runs. Currently, only AWS is supported.
@@ -734,7 +734,7 @@ class Stream:
 
         Tip:
             You can use :func:`.append_inputs_gen` for automatic batching of records instead of explicitly
-            preparing and passing batches of records.
+            preparing and providing batches of records.
 
         Yields:
             :class:`.AppendOutput` for each corresponding :class:`.AppendInput`.
@@ -779,12 +779,12 @@ class Stream:
 
             (or)
 
-            Sequence number for the first record on this stream, in case the provided
+            Sequence number for the first record on this stream, if the provided
             **start_seq_num** was smaller.
 
             (or)
 
-            Sequence number for the next record on this stream, in case the provided
+            Sequence number for the next record on this stream, if the provided
             **start_seq_num** was larger.
         """
         request = ReadRequest(
@@ -845,12 +845,12 @@ class Stream:
 
             (or)
 
-            Sequence number for the first record on this stream, in case the provided
+            Sequence number for the first record on this stream, if the provided
             **start_seq_num** was smaller.
 
             (or)
 
-            Sequence number for the next record on this stream, in case the provided
+            Sequence number for the next record on this stream, if the provided
             **start_seq_num** was larger.
 
         Returns:
