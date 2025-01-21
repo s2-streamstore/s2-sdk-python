@@ -50,50 +50,9 @@ from streamstore._mappers import (
     stream_config_schema,
     stream_info_schema,
 )
+from streamstore.utils import metered_bytes
 
 _BASIN_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-
-
-def _s2_request_token() -> str:
-    return uuid.uuid4().hex
-
-
-def _append_session_request_iter(
-    stream: str, inflight_inputs: deque[schemas.AppendInput]
-) -> Iterable[AppendSessionRequest]:
-    for input in inflight_inputs:
-        yield AppendSessionRequest(input=append_input_message(stream, input))
-
-
-async def _append_session_request_aiter(
-    stream: str,
-    inputs: AsyncIterable[schemas.AppendInput],
-    inflight_inputs: deque[schemas.AppendInput] | None = None,
-) -> AsyncIterable[AppendSessionRequest]:
-    async for input in inputs:
-        if inflight_inputs is not None:
-            inflight_inputs.append(input)
-        yield AppendSessionRequest(input=append_input_message(stream, input))
-
-
-def _validate_basin(name: str) -> bool:
-    if (
-        isinstance(name, str)
-        and (8 <= len(name) <= 48)
-        and _BASIN_NAME_REGEX.match(name)
-    ):
-        return True
-    raise ValueError(f"Invalid basin name: {name}")
-
-
-def _grpc_retry_on(e: Exception) -> bool:
-    if isinstance(e, AioRpcError) and e.code in (
-        StatusCode.DEADLINE_EXCEEDED,
-        StatusCode.UNAVAILABLE,
-        StatusCode.UNKNOWN,
-    ):
-        return True
-    return False
 
 
 def _account_service_endpoint(cloud: schemas.Cloud) -> str:
@@ -112,6 +71,59 @@ def _basin_service_endpoint(cloud: schemas.Cloud, basin: str) -> str:
             return ValueError(f"Invalid cloud: {cloud}")
 
 
+def _grpc_retry_on(e: Exception) -> bool:
+    if isinstance(e, AioRpcError) and e.code in (
+        StatusCode.DEADLINE_EXCEEDED,
+        StatusCode.UNAVAILABLE,
+        StatusCode.UNKNOWN,
+    ):
+        return True
+    return False
+
+
+def _validate_basin(name: str) -> None:
+    if (
+        isinstance(name, str)
+        and (8 <= len(name) <= 48)
+        and _BASIN_NAME_REGEX.match(name)
+    ):
+        return
+    raise ValueError(f"Invalid basin name: {name}")
+
+
+def _s2_request_token() -> str:
+    return uuid.uuid4().hex
+
+
+def _append_session_request_iter(
+    stream: str, inflight_inputs: deque[schemas.AppendInput]
+) -> Iterable[AppendSessionRequest]:
+    for input in inflight_inputs:
+        yield AppendSessionRequest(input=append_input_message(stream, input))
+
+
+def _validate_append_input(input: schemas.AppendInput) -> None:
+    num_bytes = metered_bytes(input.records)
+    num_records = len(input.records)
+    if 1 <= num_records <= 1000 and num_bytes <= schemas.ONE_MIB:
+        return
+    raise ValueError(
+        f"Invalid append input: num_records={num_records}, metered_bytes={num_bytes}"
+    )
+
+
+async def _append_session_request_aiter(
+    stream: str,
+    inputs: AsyncIterable[schemas.AppendInput],
+    inflight_inputs: deque[schemas.AppendInput] | None = None,
+) -> AsyncIterable[AppendSessionRequest]:
+    async for input in inputs:
+        _validate_append_input(input)
+        if inflight_inputs is not None:
+            inflight_inputs.append(input)
+        yield AppendSessionRequest(input=append_input_message(stream, input))
+
+
 def _prepare_read_session_request_for_retry(
     request: ReadSessionRequest, last_read_batch: list[schemas.SequencedRecord]
 ) -> None:
@@ -121,7 +133,7 @@ def _prepare_read_session_request_for_retry(
             request.limit.count = max(request.limit.count - len(last_read_batch), 0)
         if request.limit.bytes is not None and request.limit.bytes != 0:
             request.limit.bytes = max(
-                request.limit.bytes - schemas.metered_bytes(last_read_batch),
+                request.limit.bytes - metered_bytes(last_read_batch),
                 0,
             )
 
@@ -657,6 +669,7 @@ class Stream:
         """
         Append a batch of records to a stream.
         """
+        _validate_append_input(input)
         request = AppendRequest(input=append_input_message(self.name, input))
         response = (
             await self._retrying_caller(

@@ -24,4 +24,8 @@
     :members:
     :exclude-members: Record
     :member-order: bysource
+
+.. automodule:: streamstore.utils
+    :members:
+    :member-order: bysource
 ```

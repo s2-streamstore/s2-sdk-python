@@ -1,6 +1,5 @@
 __all__ = [
     "Record",
-    "CommandRecord",
     "AppendInput",
     "AppendOutput",
     "ReadLimit",
@@ -15,19 +14,16 @@ __all__ = [
     "StreamConfig",
     "BasinConfig",
     "Cloud",
-    "metered_bytes",
 ]
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Generic, Iterable, TypeVar
-
-from streamstore._exceptions import S2Error
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
-_ONE_MIB = 1024 * 1024
+ONE_MIB = 1024 * 1024
 
 
 class DocEnum(Enum):
@@ -51,45 +47,6 @@ class Record:
     headers: list[tuple[bytes, bytes]] = field(default_factory=list)
 
 
-class CommandRecord:
-    """
-    Helper class for creating `command records <https://s2.dev/docs/stream#command-records>`_.
-    """
-
-    FENCE = b"fence"
-    TRIM = b"trim"
-
-    @staticmethod
-    def fence(token: bytes) -> Record:
-        """
-        Create a fence command record.
-
-        Args:
-            token: `Fencing token <https://s2.dev/docs/stream#fencing-token>`_. Cannot exceed 16 bytes. If empty, clears the previously set token.
-        """
-        if len(token) > 16:
-            raise ValueError("fencing token cannot be greater than 16 bytes")
-        return Record(body=token, headers=[(bytes(), CommandRecord.FENCE)])
-
-    @staticmethod
-    def trim(desired_first_seq_num: int) -> Record:
-        """
-        Create a trim command record.
-
-        Args:
-            desired_first_seq_num: Sequence number for the first record to exist after trimming
-                preceeding records in the stream.
-
-        Note:
-            If **desired_first_seq_num** was smaller than the sequence number for the first existing
-            record in the stream, trimming doesn't happen.
-        """
-        return Record(
-            body=desired_first_seq_num.to_bytes(8),
-            headers=[(bytes(), CommandRecord.TRIM)],
-        )
-
-
 @dataclass(slots=True)
 class AppendInput:
     """
@@ -103,15 +60,6 @@ class AppendInput:
     match_seq_num: int | None = None
     #: Enforce a fencing token, which must have been previously set by a ``fence`` command record.
     fencing_token: bytes | None = None
-
-    def __post_init__(self):
-        num_bytes = metered_bytes(self.records)
-        num_records = len(self.records)
-        if 1 <= num_records <= 1000 and num_bytes <= _ONE_MIB:
-            return
-        raise S2Error(
-            f"Invalid append input: num_records={num_records}, metered_bytes={num_bytes}"
-        )
 
 
 @dataclass(slots=True)
@@ -263,25 +211,3 @@ class Cloud(DocEnum):
     """
 
     AWS = 1
-
-
-def metered_bytes(records: Iterable[Record | SequencedRecord]) -> int:
-    """
-    Each record is metered using the following formula:
-
-    .. code-block:: python
-
-        8 + 2 * len(headers)
-        + sum((len(name) + len(value)) for (name, value) in headers)
-        + len(body)
-
-    """
-    return sum(
-        (
-            8
-            + 2 * len(record.headers)
-            + sum((len(name) + len(value)) for (name, value) in record.headers)
-            + len(record.body)
-        )
-        for record in records
-    )
