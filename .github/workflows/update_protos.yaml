@@ -28,6 +28,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
         with:
           version: "0.5.20"
+      - uses: astral-sh/ruff-action@v3
       - name: Build package
         run: uv build
       - name: build protos
