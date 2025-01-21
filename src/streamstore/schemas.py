@@ -85,7 +85,7 @@ class AppendOutput:
 @dataclass(slots=True)
 class ReadLimit:
     """
-    Used in the parameters to :meth:`.Stream.read` and :meth:`.Stream.read_session`
+    Used in the parameters to :meth:`.Stream.read` and :meth:`.Stream.read_session`.
 
     If both ``count`` and ``bytes`` are specified, either limit may be hit.
     """
