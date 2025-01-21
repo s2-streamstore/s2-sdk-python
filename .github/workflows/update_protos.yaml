@@ -39,9 +39,11 @@ jobs:
         run: uv sync
       - name: build protos
         run: |
+          set -x
           source .venv/bin/activate
           cd src/streamstore/_lib
           python -m grpc_tools.protoc -I../../../protos --python_out=. --pyi_out=. --grpc_python_out=. ../../../protos/s2/v1alpha/s2.proto
+          ruff format .
           # workaround for https://github.com/protocolbuffers/protobuf/issues/7061
           find . -name '*.py' | xargs -I{} sed -i 's/from s2\.\(v[0-9][a-z0-9]*\) import s2_pb2 as s2_dot_\1_dot_s2__pb2/from streamstore._lib.s2.\1 import s2_pb2 as s2_dot_\1_dot_s2__pb2/' {}
 
