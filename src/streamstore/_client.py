@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Self, TypedDict, cast
 
-import stamina
 from google.protobuf.field_mask_pb2 import FieldMask
 from grpc import StatusCode, ssl_channel_credentials
 from grpc.aio import AioRpcError, Channel, secure_channel
+from stamina import AsyncRetryingCaller, retry_context
 
 from streamstore import schemas
 from streamstore._exceptions import fallible
@@ -205,9 +205,9 @@ class S2:
             enable_append_retries=enable_append_retries,
         )
         self._stub = AccountServiceStub(self._account_channel)
-        self._retrying_caller = stamina.AsyncRetryingCaller(
-            **self._config.retry_kwargs
-        ).on(_grpc_retry_on)
+        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
+            _grpc_retry_on
+        )
 
     async def __aenter__(self) -> Self:
         return self
@@ -226,7 +226,7 @@ class S2:
         Close all open connections to S2 service endpoints.
 
         Tip:
-            ``S2`` supports async context manager protocol, so you could also do the following instead of
+            ``S2`` supports async context manager protocol, so you can also do the following instead of
             explicitly closing:
 
             .. code-block:: python
@@ -297,7 +297,7 @@ class S2:
                 async with S2(..) as s2:
                     basin = s2.basin("your-basin-name")
 
-            :class:`.S2` implements the ``getitem`` magic method, so you could also do the following instead:
+            :class:`.S2` implements the ``getitem`` magic method, so you can also do the following instead:
 
             .. code-block:: python
 
@@ -438,9 +438,9 @@ class Basin:
     ) -> None:
         self._channel = channel
         self._config = config
-        self._retrying_caller = stamina.AsyncRetryingCaller(
-            **self._config.retry_kwargs
-        ).on(_grpc_retry_on)
+        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
+            _grpc_retry_on
+        )
         self._stub = BasinServiceStub(self._channel)
         self._name = name
 
@@ -508,7 +508,7 @@ class Basin:
                 async with S2(..) as s2:
                     stream = s2.basin("your-basin-name").stream("your-stream-name")
 
-            :class:`.Basin` implements the ``getitem`` magic method, so you could also do the following instead:
+            :class:`.Basin` implements the ``getitem`` magic method, so you can also do the following instead:
 
             .. code-block:: python
 
@@ -636,9 +636,9 @@ class Stream:
     def __init__(self, name: str, channel: Channel, config: _Config) -> None:
         self._name = name
         self._config = config
-        self._retrying_caller = stamina.AsyncRetryingCaller(
-            **self._config.retry_kwargs
-        ).on(_grpc_retry_on)
+        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
+            _grpc_retry_on
+        )
         self._stub = StreamServiceStub(channel)
 
     def __repr__(self) -> str:
@@ -710,9 +710,7 @@ class Stream:
         self, inputs: AsyncIterable[schemas.AppendInput]
     ) -> AsyncIterable[schemas.AppendOutput]:
         inflight_inputs: deque[schemas.AppendInput] = deque()
-        async for attempt in stamina.retry_context(
-            _grpc_retry_on, **self._config.retry_kwargs
-        ):
+        async for attempt in retry_context(_grpc_retry_on, **self._config.retry_kwargs):
             with attempt:
                 if len(inflight_inputs) != 0:
                     async for output in self._retrying_append_session_inner(
@@ -733,6 +731,10 @@ class Stream:
         """
         Append batches of records to a stream continuously, while guaranteeing pipelined inputs are
         processed in order.
+
+        Tip:
+            You can use :func:`.append_inputs_gen` for automatic batching of records instead of explicitly
+            preparing and passing batches of records.
 
         Yields:
             :class:`.AppendOutput` for each corresponding :class:`.AppendInput`.
@@ -864,9 +866,7 @@ class Stream:
             start_seq_num=start_seq_num,
             limit=read_limit_message(limit),
         )
-        async for attempt in stamina.retry_context(
-            _grpc_retry_on, **self._config.retry_kwargs
-        ):
+        async for attempt in retry_context(_grpc_retry_on, **self._config.retry_kwargs):
             with attempt:
                 async for response in self._read_session(request):
                     output = response.output

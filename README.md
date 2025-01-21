@@ -34,7 +34,7 @@ pip install streamstore
 
 ## Examples
 
-`examples/streaming` directory in the [repo](https://github.com/s2-streamstore/s2-sdk-python/tree/main/examples/streaming) contain examples for streaming APIs.
+`examples/` directory in the [repo](https://github.com/s2-streamstore/s2-sdk-python/tree/main/examples/) contain examples for streaming APIs.
 
 ## Get in touch
 

@@ -54,7 +54,7 @@ class AppendInput:
     """
 
     #: Batch of records to append atomically, which must contain at least one record,
-    #: and no more than 1000. The total size of the batch must not exceed 1MiB of :func:`.metered_bytes`.
+    #: and no more than 1000. The size of the batch must not exceed 1MiB of :func:`.metered_bytes`.
     records: list[Record]
     #: Enforce that the sequence number issued to the first record in the batch matches this value.
     match_seq_num: int | None = None
