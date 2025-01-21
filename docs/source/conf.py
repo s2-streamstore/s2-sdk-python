@@ -10,7 +10,7 @@ from datetime import date
 
 project = "streamstore"
 copyright = f"{date.today().year}, Bandar Systems Inc"
-release = "0.2.0"
+release = "1.0.0"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
