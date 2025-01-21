@@ -7,6 +7,9 @@ permissions:
 on:
   repository_dispatch:
     types: [s2-proto-update]
+  push:
+    branches:
+      - update_protos
 
 jobs:
   generate-docs:
