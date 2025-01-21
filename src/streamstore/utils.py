@@ -208,8 +208,8 @@ async def append_inputs_gen(
         max_linger_per_batch: Maximum duration for each batch to accumulate records before yielding.
 
     Note:
-        If **max_linger_per_batch** is ``None``, appending will not occur until one of the other two
-        limits -- **max_records_per_batch** or **max_bytes_per_batch** -- is met.
+        If **max_linger_per_batch** is ``None``, :class:`.AppendInput` will be yielded only
+        when **max_records_per_batch** or **max_bytes_per_batch** is reached.
     """
     append_input_queue: Queue[AppendInput | None] = Queue()
     append_input_aiter = _AppendInputAsyncIterator(append_input_queue)
