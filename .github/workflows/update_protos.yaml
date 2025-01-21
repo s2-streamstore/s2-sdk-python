@@ -35,8 +35,8 @@ jobs:
         with:
           args: "version"
           src: "-s"
-      - name: Build package
-        run: uv build
+      - name: Sync package
+        run: uv sync
       - name: build protos
         run: |
           source .venv/bin/activate
