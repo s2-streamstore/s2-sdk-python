@@ -1,5 +1,6 @@
 import asyncio
 import os
+
 from streamstore import S2
 
 AUTH_TOKEN = os.getenv("S2_AUTH_TOKEN")
