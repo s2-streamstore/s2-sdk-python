@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2025-01-21
+
+### Features
+
+- Add `append_inputs_gen` util for automatic batching of records ([#19](https://github.com/s2-streamstore/s2-sdk-python/issues/19))
+
+### Refactor
+
+- Make `fence` and `trim` APIs behave like mentioned in note ([#18](https://github.com/s2-streamstore/s2-sdk-python/issues/18))
+- Move utils into a separate `utils` mod ([#21](https://github.com/s2-streamstore/s2-sdk-python/issues/21))
+
+### Documentation
+
+- Consistent vocab and format ([#23](https://github.com/s2-streamstore/s2-sdk-python/issues/23))
+- Fix note in `append_inputs_gen` util fn  ([#24](https://github.com/s2-streamstore/s2-sdk-python/issues/24))
+
+### Styling
+
+- Format previously missed files in `_lib` using `ruff` ([#22](https://github.com/s2-streamstore/s2-sdk-python/issues/22))
+
+### Miscellaneous Tasks
+
+- [**breaking**] Remove trim and fence helper methods ([#20](https://github.com/s2-streamstore/s2-sdk-python/issues/20))
+
 ## [0.2.0] - 2025-01-17
 
 ### Bug Fixes

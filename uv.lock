@@ -977,7 +977,7 @@ wheels = [
 
 [[package]]
 name = "streamstore"
-version = "0.2.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "grpc-stubs" },
