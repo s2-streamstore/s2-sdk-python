@@ -33,7 +33,7 @@ jobs:
           version: "0.5.20"
       - uses: astral-sh/ruff-action@v3
         with:
-         src: src/streamstore/_lib
+          args: "version"
       - name: Build package
         run: uv build
       - name: build protos
