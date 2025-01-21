@@ -3,7 +3,13 @@ from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Iterable as _Iterable, Mapping as _Mapping, Optional as _Optional, Union as _Union
+from typing import (
+    ClassVar as _ClassVar,
+    Iterable as _Iterable,
+    Mapping as _Mapping,
+    Optional as _Optional,
+    Union as _Union,
+)
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
@@ -19,6 +25,7 @@ class BasinState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     BASIN_STATE_ACTIVE: _ClassVar[BasinState]
     BASIN_STATE_CREATING: _ClassVar[BasinState]
     BASIN_STATE_DELETING: _ClassVar[BasinState]
+
 STORAGE_CLASS_UNSPECIFIED: StorageClass
 STORAGE_CLASS_STANDARD: StorageClass
 STORAGE_CLASS_EXPRESS: StorageClass
@@ -35,7 +42,12 @@ class ListBasinsRequest(_message.Message):
     prefix: str
     start_after: str
     limit: int
-    def __init__(self, prefix: _Optional[str] = ..., start_after: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        prefix: _Optional[str] = ...,
+        start_after: _Optional[str] = ...,
+        limit: _Optional[int] = ...,
+    ) -> None: ...
 
 class ListBasinsResponse(_message.Message):
     __slots__ = ("basins", "has_more")
@@ -43,7 +55,11 @@ class ListBasinsResponse(_message.Message):
     HAS_MORE_FIELD_NUMBER: _ClassVar[int]
     basins: _containers.RepeatedCompositeFieldContainer[BasinInfo]
     has_more: bool
-    def __init__(self, basins: _Optional[_Iterable[_Union[BasinInfo, _Mapping]]] = ..., has_more: bool = ...) -> None: ...
+    def __init__(
+        self,
+        basins: _Optional[_Iterable[_Union[BasinInfo, _Mapping]]] = ...,
+        has_more: bool = ...,
+    ) -> None: ...
 
 class CreateBasinRequest(_message.Message):
     __slots__ = ("basin", "config", "scope", "cell")
@@ -55,7 +71,13 @@ class CreateBasinRequest(_message.Message):
     config: BasinConfig
     scope: str
     cell: str
-    def __init__(self, basin: _Optional[str] = ..., config: _Optional[_Union[BasinConfig, _Mapping]] = ..., scope: _Optional[str] = ..., cell: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        basin: _Optional[str] = ...,
+        config: _Optional[_Union[BasinConfig, _Mapping]] = ...,
+        scope: _Optional[str] = ...,
+        cell: _Optional[str] = ...,
+    ) -> None: ...
 
 class CreateBasinResponse(_message.Message):
     __slots__ = ("info",)
@@ -83,7 +105,9 @@ class GetBasinConfigResponse(_message.Message):
     __slots__ = ("config",)
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     config: BasinConfig
-    def __init__(self, config: _Optional[_Union[BasinConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, config: _Optional[_Union[BasinConfig, _Mapping]] = ...
+    ) -> None: ...
 
 class ReconfigureBasinRequest(_message.Message):
     __slots__ = ("basin", "config", "mask")
@@ -93,13 +117,20 @@ class ReconfigureBasinRequest(_message.Message):
     basin: str
     config: BasinConfig
     mask: _field_mask_pb2.FieldMask
-    def __init__(self, basin: _Optional[str] = ..., config: _Optional[_Union[BasinConfig, _Mapping]] = ..., mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        basin: _Optional[str] = ...,
+        config: _Optional[_Union[BasinConfig, _Mapping]] = ...,
+        mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ...,
+    ) -> None: ...
 
 class ReconfigureBasinResponse(_message.Message):
     __slots__ = ("config",)
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     config: BasinConfig
-    def __init__(self, config: _Optional[_Union[BasinConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, config: _Optional[_Union[BasinConfig, _Mapping]] = ...
+    ) -> None: ...
 
 class StreamInfo(_message.Message):
     __slots__ = ("name", "created_at", "deleted_at")
@@ -109,7 +140,12 @@ class StreamInfo(_message.Message):
     name: str
     created_at: int
     deleted_at: int
-    def __init__(self, name: _Optional[str] = ..., created_at: _Optional[int] = ..., deleted_at: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        name: _Optional[str] = ...,
+        created_at: _Optional[int] = ...,
+        deleted_at: _Optional[int] = ...,
+    ) -> None: ...
 
 class ListStreamsRequest(_message.Message):
     __slots__ = ("prefix", "start_after", "limit")
@@ -119,7 +155,12 @@ class ListStreamsRequest(_message.Message):
     prefix: str
     start_after: str
     limit: int
-    def __init__(self, prefix: _Optional[str] = ..., start_after: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        prefix: _Optional[str] = ...,
+        start_after: _Optional[str] = ...,
+        limit: _Optional[int] = ...,
+    ) -> None: ...
 
 class ListStreamsResponse(_message.Message):
     __slots__ = ("streams", "has_more")
@@ -127,7 +168,11 @@ class ListStreamsResponse(_message.Message):
     HAS_MORE_FIELD_NUMBER: _ClassVar[int]
     streams: _containers.RepeatedCompositeFieldContainer[StreamInfo]
     has_more: bool
-    def __init__(self, streams: _Optional[_Iterable[_Union[StreamInfo, _Mapping]]] = ..., has_more: bool = ...) -> None: ...
+    def __init__(
+        self,
+        streams: _Optional[_Iterable[_Union[StreamInfo, _Mapping]]] = ...,
+        has_more: bool = ...,
+    ) -> None: ...
 
 class CreateStreamRequest(_message.Message):
     __slots__ = ("stream", "config")
@@ -135,7 +180,11 @@ class CreateStreamRequest(_message.Message):
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     stream: str
     config: StreamConfig
-    def __init__(self, stream: _Optional[str] = ..., config: _Optional[_Union[StreamConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        stream: _Optional[str] = ...,
+        config: _Optional[_Union[StreamConfig, _Mapping]] = ...,
+    ) -> None: ...
 
 class CreateStreamResponse(_message.Message):
     __slots__ = ("info",)
@@ -163,7 +212,9 @@ class GetStreamConfigResponse(_message.Message):
     __slots__ = ("config",)
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     config: StreamConfig
-    def __init__(self, config: _Optional[_Union[StreamConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, config: _Optional[_Union[StreamConfig, _Mapping]] = ...
+    ) -> None: ...
 
 class ReconfigureStreamRequest(_message.Message):
     __slots__ = ("stream", "config", "mask")
@@ -173,13 +224,20 @@ class ReconfigureStreamRequest(_message.Message):
     stream: str
     config: StreamConfig
     mask: _field_mask_pb2.FieldMask
-    def __init__(self, stream: _Optional[str] = ..., config: _Optional[_Union[StreamConfig, _Mapping]] = ..., mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        stream: _Optional[str] = ...,
+        config: _Optional[_Union[StreamConfig, _Mapping]] = ...,
+        mask: _Optional[_Union[_field_mask_pb2.FieldMask, _Mapping]] = ...,
+    ) -> None: ...
 
 class ReconfigureStreamResponse(_message.Message):
     __slots__ = ("config",)
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     config: StreamConfig
-    def __init__(self, config: _Optional[_Union[StreamConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, config: _Optional[_Union[StreamConfig, _Mapping]] = ...
+    ) -> None: ...
 
 class CheckTailRequest(_message.Message):
     __slots__ = ("stream",)
@@ -203,7 +261,13 @@ class AppendInput(_message.Message):
     records: _containers.RepeatedCompositeFieldContainer[AppendRecord]
     match_seq_num: int
     fencing_token: bytes
-    def __init__(self, stream: _Optional[str] = ..., records: _Optional[_Iterable[_Union[AppendRecord, _Mapping]]] = ..., match_seq_num: _Optional[int] = ..., fencing_token: _Optional[bytes] = ...) -> None: ...
+    def __init__(
+        self,
+        stream: _Optional[str] = ...,
+        records: _Optional[_Iterable[_Union[AppendRecord, _Mapping]]] = ...,
+        match_seq_num: _Optional[int] = ...,
+        fencing_token: _Optional[bytes] = ...,
+    ) -> None: ...
 
 class AppendOutput(_message.Message):
     __slots__ = ("start_seq_num", "end_seq_num", "next_seq_num")
@@ -213,31 +277,44 @@ class AppendOutput(_message.Message):
     start_seq_num: int
     end_seq_num: int
     next_seq_num: int
-    def __init__(self, start_seq_num: _Optional[int] = ..., end_seq_num: _Optional[int] = ..., next_seq_num: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        start_seq_num: _Optional[int] = ...,
+        end_seq_num: _Optional[int] = ...,
+        next_seq_num: _Optional[int] = ...,
+    ) -> None: ...
 
 class AppendRequest(_message.Message):
     __slots__ = ("input",)
     INPUT_FIELD_NUMBER: _ClassVar[int]
     input: AppendInput
-    def __init__(self, input: _Optional[_Union[AppendInput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, input: _Optional[_Union[AppendInput, _Mapping]] = ...
+    ) -> None: ...
 
 class AppendResponse(_message.Message):
     __slots__ = ("output",)
     OUTPUT_FIELD_NUMBER: _ClassVar[int]
     output: AppendOutput
-    def __init__(self, output: _Optional[_Union[AppendOutput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, output: _Optional[_Union[AppendOutput, _Mapping]] = ...
+    ) -> None: ...
 
 class AppendSessionRequest(_message.Message):
     __slots__ = ("input",)
     INPUT_FIELD_NUMBER: _ClassVar[int]
     input: AppendInput
-    def __init__(self, input: _Optional[_Union[AppendInput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, input: _Optional[_Union[AppendInput, _Mapping]] = ...
+    ) -> None: ...
 
 class AppendSessionResponse(_message.Message):
     __slots__ = ("output",)
     OUTPUT_FIELD_NUMBER: _ClassVar[int]
     output: AppendOutput
-    def __init__(self, output: _Optional[_Union[AppendOutput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, output: _Optional[_Union[AppendOutput, _Mapping]] = ...
+    ) -> None: ...
 
 class ReadOutput(_message.Message):
     __slots__ = ("batch", "first_seq_num", "next_seq_num")
@@ -247,7 +324,12 @@ class ReadOutput(_message.Message):
     batch: SequencedRecordBatch
     first_seq_num: int
     next_seq_num: int
-    def __init__(self, batch: _Optional[_Union[SequencedRecordBatch, _Mapping]] = ..., first_seq_num: _Optional[int] = ..., next_seq_num: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        batch: _Optional[_Union[SequencedRecordBatch, _Mapping]] = ...,
+        first_seq_num: _Optional[int] = ...,
+        next_seq_num: _Optional[int] = ...,
+    ) -> None: ...
 
 class ReadRequest(_message.Message):
     __slots__ = ("stream", "start_seq_num", "limit")
@@ -257,13 +339,20 @@ class ReadRequest(_message.Message):
     stream: str
     start_seq_num: int
     limit: ReadLimit
-    def __init__(self, stream: _Optional[str] = ..., start_seq_num: _Optional[int] = ..., limit: _Optional[_Union[ReadLimit, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        stream: _Optional[str] = ...,
+        start_seq_num: _Optional[int] = ...,
+        limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
+    ) -> None: ...
 
 class ReadResponse(_message.Message):
     __slots__ = ("output",)
     OUTPUT_FIELD_NUMBER: _ClassVar[int]
     output: ReadOutput
-    def __init__(self, output: _Optional[_Union[ReadOutput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, output: _Optional[_Union[ReadOutput, _Mapping]] = ...
+    ) -> None: ...
 
 class ReadLimit(_message.Message):
     __slots__ = ("count", "bytes")
@@ -271,7 +360,9 @@ class ReadLimit(_message.Message):
     BYTES_FIELD_NUMBER: _ClassVar[int]
     count: int
     bytes: int
-    def __init__(self, count: _Optional[int] = ..., bytes: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self, count: _Optional[int] = ..., bytes: _Optional[int] = ...
+    ) -> None: ...
 
 class ReadSessionRequest(_message.Message):
     __slots__ = ("stream", "start_seq_num", "limit")
@@ -281,13 +372,20 @@ class ReadSessionRequest(_message.Message):
     stream: str
     start_seq_num: int
     limit: ReadLimit
-    def __init__(self, stream: _Optional[str] = ..., start_seq_num: _Optional[int] = ..., limit: _Optional[_Union[ReadLimit, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        stream: _Optional[str] = ...,
+        start_seq_num: _Optional[int] = ...,
+        limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
+    ) -> None: ...
 
 class ReadSessionResponse(_message.Message):
     __slots__ = ("output",)
     OUTPUT_FIELD_NUMBER: _ClassVar[int]
     output: ReadOutput
-    def __init__(self, output: _Optional[_Union[ReadOutput, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, output: _Optional[_Union[ReadOutput, _Mapping]] = ...
+    ) -> None: ...
 
 class StreamConfig(_message.Message):
     __slots__ = ("storage_class", "age")
@@ -295,13 +393,19 @@ class StreamConfig(_message.Message):
     AGE_FIELD_NUMBER: _ClassVar[int]
     storage_class: StorageClass
     age: int
-    def __init__(self, storage_class: _Optional[_Union[StorageClass, str]] = ..., age: _Optional[int] = ...) -> None: ...
+    def __init__(
+        self,
+        storage_class: _Optional[_Union[StorageClass, str]] = ...,
+        age: _Optional[int] = ...,
+    ) -> None: ...
 
 class BasinConfig(_message.Message):
     __slots__ = ("default_stream_config",)
     DEFAULT_STREAM_CONFIG_FIELD_NUMBER: _ClassVar[int]
     default_stream_config: StreamConfig
-    def __init__(self, default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self, default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...
+    ) -> None: ...
 
 class BasinInfo(_message.Message):
     __slots__ = ("name", "scope", "cell", "state")
@@ -313,7 +417,13 @@ class BasinInfo(_message.Message):
     scope: str
     cell: str
     state: BasinState
-    def __init__(self, name: _Optional[str] = ..., scope: _Optional[str] = ..., cell: _Optional[str] = ..., state: _Optional[_Union[BasinState, str]] = ...) -> None: ...
+    def __init__(
+        self,
+        name: _Optional[str] = ...,
+        scope: _Optional[str] = ...,
+        cell: _Optional[str] = ...,
+        state: _Optional[_Union[BasinState, str]] = ...,
+    ) -> None: ...
 
 class Header(_message.Message):
     __slots__ = ("name", "value")
@@ -321,7 +431,9 @@ class Header(_message.Message):
     VALUE_FIELD_NUMBER: _ClassVar[int]
     name: bytes
     value: bytes
-    def __init__(self, name: _Optional[bytes] = ..., value: _Optional[bytes] = ...) -> None: ...
+    def __init__(
+        self, name: _Optional[bytes] = ..., value: _Optional[bytes] = ...
+    ) -> None: ...
 
 class AppendRecord(_message.Message):
     __slots__ = ("headers", "body")
@@ -329,7 +441,11 @@ class AppendRecord(_message.Message):
     BODY_FIELD_NUMBER: _ClassVar[int]
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
-    def __init__(self, headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ..., body: _Optional[bytes] = ...) -> None: ...
+    def __init__(
+        self,
+        headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
+        body: _Optional[bytes] = ...,
+    ) -> None: ...
 
 class SequencedRecord(_message.Message):
     __slots__ = ("seq_num", "headers", "body")
@@ -339,10 +455,17 @@ class SequencedRecord(_message.Message):
     seq_num: int
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
-    def __init__(self, seq_num: _Optional[int] = ..., headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ..., body: _Optional[bytes] = ...) -> None: ...
+    def __init__(
+        self,
+        seq_num: _Optional[int] = ...,
+        headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
+        body: _Optional[bytes] = ...,
+    ) -> None: ...
 
 class SequencedRecordBatch(_message.Message):
     __slots__ = ("records",)
     RECORDS_FIELD_NUMBER: _ClassVar[int]
     records: _containers.RepeatedCompositeFieldContainer[SequencedRecord]
-    def __init__(self, records: _Optional[_Iterable[_Union[SequencedRecord, _Mapping]]] = ...) -> None: ...
+    def __init__(
+        self, records: _Optional[_Iterable[_Union[SequencedRecord, _Mapping]]] = ...
+    ) -> None: ...
