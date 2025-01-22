@@ -1,0 +1,45 @@
+name: Update protos
+permissions:
+  contents: write
+  pull-requests: write
+on:
+  repository_dispatch:
+    types: [s2-proto-update]
+jobs:
+  update_protos:
+    name: Update protos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Update submodules
+        id: submodules
+        uses: sgoudham/update-git-submodules@v2.1.1
+        with:
+          submodules: protos
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.20"
+      - name: Sync package
+        run: uv sync
+      - name: Build protos
+        run: |
+          set -x
+          source .venv/bin/activate
+          cd src/streamstore/_lib
+          python -m grpc_tools.protoc -I../../../protos --python_out=. --pyi_out=. --grpc_python_out=. ../../../protos/s2/v1alpha/s2.proto
+          ruff format .
+          # workaround for https://github.com/protocolbuffers/protobuf/issues/7061
+          find . -name '*.py' | xargs -I{} sed -i 's/from s2\.\(v[0-9][a-z0-9]*\) import s2_pb2 as s2_dot_\1_dot_s2__pb2/from streamstore._lib.s2.\1 import s2_pb2 as s2_dot_\1_dot_s2__pb2/' {}
+      - name: Create pull request
+        if: ${{ steps.submodules.outputs['protos--updated'] }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          committer: s2-helper[bot] <194906454+s2-helper[bot]@users.noreply.github.com>
+          author: s2-helper[bot] <194906454+s2-helper[bot]@users.noreply.github.com>
+          title: "chore: update proto"
+          branch: "proto/update-s2-protos-${{ steps.submodules.outputs['protos--latestShortCommitSha'] }}"
+          body: ${{ steps.submodules.outputs.prBody }}
