@@ -5,6 +5,9 @@ permissions:
 on:
   repository_dispatch:
     types: [s2-proto-update]
+  push:
+    branches:
+      - update_protos
 jobs:
   update_protos:
     name: Update protos
@@ -40,6 +43,6 @@ jobs:
         with:
           committer: s2-helper[bot] <194906454+s2-helper[bot]@users.noreply.github.com>
           author: s2-helper[bot] <194906454+s2-helper[bot]@users.noreply.github.com>
-          title: chore - update proto
+          title: "chore: update proto"
           branch: "proto/update-s2-protos-${{ steps.submodules.outputs['protos--latestShortCommitSha'] }}"
           body: ${{ steps.submodules.outputs.prBody }}
