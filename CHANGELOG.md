@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-01-25
+
+### Features
+
+- Expose `Basin` and `Stream` so they can used as type hints ([#30](https://github.com/s2-streamstore/s2-sdk-python/issues/30))
+
 ## [1.0.0] - 2025-01-21
 
 ### Features
