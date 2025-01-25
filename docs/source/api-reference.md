@@ -1,11 +1,11 @@
 # API Reference
 
 ```{eval-rst}
-.. automodule:: streamstore
+.. module:: streamstore
+
+.. autoclass:: S2
     :members:
     :member-order: bysource
-
-.. module:: streamstore._client
 
 .. autoclass:: Basin()
     :members:
