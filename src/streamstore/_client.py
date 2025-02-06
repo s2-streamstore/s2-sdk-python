@@ -55,22 +55,6 @@ from streamstore.utils import metered_bytes
 _BASIN_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 
 
-def _account_service_endpoint(cloud: schemas.Cloud) -> str:
-    match cloud:
-        case schemas.Cloud.AWS:
-            return "aws.s2.dev:443"
-        case _:
-            return ValueError(f"Invalid cloud: {cloud}")
-
-
-def _basin_service_endpoint(cloud: schemas.Cloud, basin: str) -> str:
-    match cloud:
-        case schemas.Cloud.AWS:
-            return f"{basin}.b.aws.s2.dev:443"
-        case _:
-            return ValueError(f"Invalid cloud: {cloud}")
-
-
 def _grpc_retry_on(e: Exception) -> bool:
     if isinstance(e, AioRpcError) and e.code in (
         StatusCode.DEADLINE_EXCEEDED,
@@ -161,16 +145,16 @@ class S2:
 
     Args:
         auth_token: Authentication token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
+        endpoints: S2 endpoints. If None, public endpoints for S2 service running in AWS cloud will be used.
         request_timeout: Timeout for gRPC requests made by the client. Default value is 5 seconds.
         max_retries: Maximum number of retries for a gRPC request. Default value is 3.
         retries_timeout: Maximum total duration for all retries of a gRPC request. Default value is 10 seconds.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
-        cloud: Cloud in which the S2 service runs. Currently, only AWS is supported.
     """
 
     __slots__ = (
-        "_cloud",
+        "_endpoints",
         "_account_channel",
         "_basin_channels",
         "_config",
@@ -182,15 +166,19 @@ class S2:
     def __init__(
         self,
         auth_token: str,
+        endpoints: schemas.Endpoints | None = None,
         request_timeout: timedelta = timedelta(seconds=5.0),
         max_retries: int | None = 3,
         retries_timeout: timedelta = timedelta(seconds=10.0),
         enable_append_retries: bool = True,
-        cloud: schemas.Cloud = schemas.Cloud.AWS,
     ) -> None:
-        self._cloud = cloud
+        self._endpoints = (
+            endpoints
+            if endpoints is not None
+            else schemas.Endpoints.for_cloud(schemas.Cloud.AWS)
+        )
         self._account_channel = secure_channel(
-            _account_service_endpoint(cloud), ssl_channel_credentials()
+            self._endpoints._account(), ssl_channel_credentials()
         )
         self._basin_channels: dict[str, Channel] = {}
         self._config = _Config(
@@ -307,7 +295,7 @@ class S2:
         _validate_basin(name)
         if name not in self._basin_channels:
             self._basin_channels[name] = secure_channel(
-                _basin_service_endpoint(self._cloud, name), ssl_channel_credentials()
+                self._endpoints._basin(name), ssl_channel_credentials()
             )
         return Basin(name, self._basin_channels[name], self._config)
 
