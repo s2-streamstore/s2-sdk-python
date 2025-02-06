@@ -14,12 +14,16 @@ __all__ = [
     "StreamConfig",
     "BasinConfig",
     "Cloud",
+    "Endpoints",
 ]
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Generic, TypeVar
+
+from streamstore._exceptions import fallible
 
 T = TypeVar("T")
 
@@ -211,3 +215,68 @@ class Cloud(DocEnum):
     """
 
     AWS = 1
+
+
+class Endpoints:
+    """
+    `S2 endpoints <https://s2.dev/docs/endpoints>`_.
+    """
+
+    __slots__ = ("_account_authority", "_basin_base_authority")
+
+    _account_authority: str
+    _basin_base_authority: str
+
+    def __init__(self, account_authority: str, basin_base_authority: str):
+        self._account_authority = account_authority
+        self._basin_base_authority = basin_base_authority
+
+    @classmethod
+    @fallible
+    def for_cloud(cls, cloud: Cloud) -> "Endpoints":
+        """
+        Construct S2 endpoints for the given cloud.
+
+        Args:
+            cloud: Cloud in which the S2 service runs.
+        """
+        return cls(
+            _account_authority(cloud),
+            _basin_authority(cloud),
+        )
+
+    @classmethod
+    @fallible
+    def _from_env(cls) -> "Endpoints":
+        account_authority = os.getenv("S2_ACCOUNT_ENDPOINT")
+        basin_authority = os.getenv("S2_BASIN_ENDPOINT")
+        if (
+            account_authority
+            and basin_authority
+            and basin_authority.startswith("{basin}.")
+        ):
+            basin_base_authority = basin_authority.removeprefix("{basin}.")
+            return cls(account_authority, basin_base_authority)
+        raise ValueError("Invalid S2_ACCOUNT_ENDPOINT and/or S2_BASIN_ENDPOINT")
+
+    def _account(self) -> str:
+        return self._account_authority
+
+    def _basin(self, basin_name: str) -> str:
+        return f"{basin_name}.{self._basin_base_authority}"
+
+
+def _account_authority(cloud: Cloud) -> str:
+    match cloud:
+        case Cloud.AWS:
+            return "aws.s2.dev"
+        case _:
+            raise ValueError(f"Invalid cloud: {cloud}")
+
+
+def _basin_authority(cloud: Cloud) -> str:
+    match cloud:
+        case Cloud.AWS:
+            return "b.aws.s2.dev"
+        case _:
+            raise ValueError(f"Invalid cloud: {cloud}")

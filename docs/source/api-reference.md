@@ -22,8 +22,13 @@
 
 .. automodule:: streamstore.schemas
     :members:
-    :exclude-members: Record
+    :exclude-members: Record, Endpoints
     :member-order: bysource
+
+.. module:: streamstore.schemas
+    :no-index:
+.. autoclass:: Endpoints()
+    :members:
 
 .. automodule:: streamstore.utils
     :members:
