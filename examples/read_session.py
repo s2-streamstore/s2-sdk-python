@@ -2,14 +2,20 @@ import asyncio
 import os
 
 from streamstore import S2
+from streamstore.schemas import Endpoints
+import logging
 
 AUTH_TOKEN = os.getenv("S2_AUTH_TOKEN")
 MY_BASIN = os.getenv("MY_BASIN")
 MY_STREAM = os.getenv("MY_STREAM")
 
+logging.basicConfig(level=logging.DEBUG)
+
 
 async def consumer():
-    async with S2(auth_token=AUTH_TOKEN) as s2:
+    async with S2(
+        auth_token=AUTH_TOKEN, endpoints=Endpoints._from_env(), max_retries=5
+    ) as s2:
         stream = s2[MY_BASIN][MY_STREAM]
         start_seq_num = await stream.check_tail()
         print(f"reading from seq_num: {start_seq_num}")
