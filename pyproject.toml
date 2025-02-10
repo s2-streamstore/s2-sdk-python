@@ -7,9 +7,9 @@ requires-python = ">=3.11"
 dependencies = [
     "grpcio-tools>=1.69.0",
     "grpcio>=1.69.0",
-    "stamina>=24.3.0",
     "types-protobuf>=5.29.1.20241207",
     "grpc-stubs>=1.53.0.5",
+    "anyio>=4.8.0",
 ]
 
 [project.optional-dependencies]

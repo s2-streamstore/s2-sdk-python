@@ -1,15 +1,17 @@
+import asyncio
 import re
 import uuid
 from collections import deque
-from collections.abc import AsyncIterable, Iterable
+from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Self, TypedDict, cast
 
+from anyio import create_memory_object_stream, create_task_group
+from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from google.protobuf.field_mask_pb2 import FieldMask
 from grpc import StatusCode, ssl_channel_credentials
 from grpc.aio import AioRpcError, Channel, secure_channel
-from stamina import AsyncRetryingCaller, retry_context
 
 from streamstore import schemas
 from streamstore._exceptions import fallible
@@ -28,7 +30,6 @@ from streamstore._lib.s2.v1alpha.s2_pb2 import (
     ListStreamsRequest,
     ReadRequest,
     ReadSessionRequest,
-    ReadSessionResponse,
     ReconfigureBasinRequest,
     ReconfigureStreamRequest,
     StreamConfig,
@@ -50,13 +51,15 @@ from streamstore._mappers import (
     stream_config_schema,
     stream_info_schema,
 )
+from streamstore._retrier import Attempt, Retrier, compute_backoffs
 from streamstore.utils import metered_bytes
 
 _BASIN_NAME_REGEX = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
+_MEMORY_STREAM_MAX_BUF_SIZE = 100
 
 
 def _grpc_retry_on(e: Exception) -> bool:
-    if isinstance(e, AioRpcError) and e.code in (
+    if isinstance(e, AioRpcError) and e.code() in (
         StatusCode.DEADLINE_EXCEEDED,
         StatusCode.UNAVAILABLE,
         StatusCode.UNKNOWN,
@@ -79,13 +82,6 @@ def _s2_request_token() -> str:
     return uuid.uuid4().hex
 
 
-def _append_session_request_iter(
-    stream: str, inflight_inputs: deque[schemas.AppendInput]
-) -> Iterable[AppendSessionRequest]:
-    for input in inflight_inputs:
-        yield AppendSessionRequest(input=append_input_message(stream, input))
-
-
 def _validate_append_input(input: schemas.AppendInput) -> None:
     num_bytes = metered_bytes(input.records)
     num_records = len(input.records)
@@ -96,15 +92,22 @@ def _validate_append_input(input: schemas.AppendInput) -> None:
     )
 
 
+async def _pipe_append_inputs(
+    inputs: AsyncIterable[schemas.AppendInput],
+    input_tx: MemoryObjectSendStream[schemas.AppendInput],
+):
+    async with input_tx:
+        async for input in inputs:
+            _validate_append_input(input)
+            await input_tx.send(input)
+
+
 async def _append_session_request_aiter(
     stream: str,
     inputs: AsyncIterable[schemas.AppendInput],
-    inflight_inputs: deque[schemas.AppendInput] | None = None,
 ) -> AsyncIterable[AppendSessionRequest]:
     async for input in inputs:
         _validate_append_input(input)
-        if inflight_inputs is not None:
-            inflight_inputs.append(input)
         yield AppendSessionRequest(input=append_input_message(stream, input))
 
 
@@ -112,7 +115,7 @@ def _prepare_read_session_request_for_retry(
     request: ReadSessionRequest, last_read_batch: list[schemas.SequencedRecord]
 ) -> None:
     if len(last_read_batch) > 0:
-        request.start_seq_num = last_read_batch[-1].seq_num
+        request.start_seq_num = last_read_batch[-1].seq_num + 1
         if request.limit.count is not None and request.limit.count != 0:
             request.limit.count = max(request.limit.count - len(last_read_batch), 0)
         if request.limit.bytes is not None and request.limit.bytes != 0:
@@ -127,15 +130,10 @@ class _StubKwargs(TypedDict):
     metadata: list[tuple[str, str]]
 
 
-class _RetryKwargs(TypedDict):
-    attempts: int | None
-    timeout: timedelta | None
-
-
 @dataclass(slots=True)
 class _Config:
     stub_kwargs: _StubKwargs
-    retry_kwargs: _RetryKwargs
+    max_retries: int
     enable_append_retries: bool
 
 
@@ -148,7 +146,6 @@ class S2:
         endpoints: S2 endpoints. If None, public endpoints for S2 service running in AWS cloud will be used.
         request_timeout: Timeout for gRPC requests made by the client. Default value is 5 seconds.
         max_retries: Maximum number of retries for a gRPC request. Default value is 3.
-        retries_timeout: Maximum total duration for all retries of a gRPC request. Default value is 10 seconds.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
     """
@@ -159,7 +156,7 @@ class S2:
         "_basin_channels",
         "_config",
         "_stub",
-        "_retrying_caller",
+        "_retrier",
     )
 
     @fallible
@@ -168,8 +165,7 @@ class S2:
         auth_token: str,
         endpoints: schemas.Endpoints | None = None,
         request_timeout: timedelta = timedelta(seconds=5.0),
-        max_retries: int | None = 3,
-        retries_timeout: timedelta = timedelta(seconds=10.0),
+        max_retries: int = 3,
         enable_append_retries: bool = True,
     ) -> None:
         self._endpoints = (
@@ -178,7 +174,8 @@ class S2:
             else schemas.Endpoints.for_cloud(schemas.Cloud.AWS)
         )
         self._account_channel = secure_channel(
-            self._endpoints._account(), ssl_channel_credentials()
+            target=self._endpoints._account(),
+            credentials=ssl_channel_credentials(),
         )
         self._basin_channels: dict[str, Channel] = {}
         self._config = _Config(
@@ -186,15 +183,13 @@ class S2:
                 "timeout": request_timeout.total_seconds(),
                 "metadata": [("authorization", f"Bearer {auth_token}")],
             },
-            retry_kwargs={
-                "attempts": max_retries,
-                "timeout": retries_timeout,
-            },
+            max_retries=max_retries,
             enable_append_retries=enable_append_retries,
         )
         self._stub = AccountServiceStub(self._account_channel)
-        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
-            _grpc_retry_on
+        self._retrier = Retrier(
+            should_retry_on=_grpc_retry_on,
+            max_attempts=max_retries,
         )
 
     async def __aenter__(self) -> Self:
@@ -261,7 +256,7 @@ class S2:
         metadata = self._config.stub_kwargs["metadata"] + [
             ("s2-request-token", _s2_request_token())
         ]
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.CreateBasin,
             request,
             timeout=self._config.stub_kwargs["timeout"],
@@ -295,7 +290,8 @@ class S2:
         _validate_basin(name)
         if name not in self._basin_channels:
             self._basin_channels[name] = secure_channel(
-                self._endpoints._basin(name), ssl_channel_credentials()
+                target=self._endpoints._basin(name),
+                credentials=ssl_channel_credentials(),
             )
         return Basin(name, self._basin_channels[name], self._config)
 
@@ -318,11 +314,10 @@ class S2:
                 returned in one page is 1000.
         """
         request = ListBasinsRequest(prefix=prefix, start_after=start_after, limit=limit)
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.ListBasins,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         return schemas.Page(
             items=[basin_info_schema(b) for b in response.basins],
@@ -341,11 +336,10 @@ class S2:
             Basin deletion is asynchronous, and may take a few minutes to complete.
         """
         request = DeleteBasinRequest(basin=name)
-        await self._retrying_caller(
+        await self._retrier(
             self._stub.DeleteBasin,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
 
     @fallible
@@ -357,7 +351,7 @@ class S2:
             name: Name of the basin.
         """
         request = GetBasinConfigRequest(basin=name)
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.GetBasinConfig,
             request,
             timeout=self._config.stub_kwargs["timeout"],
@@ -394,11 +388,10 @@ class S2:
             ),
         )
         request = ReconfigureBasinRequest(basin=name, config=basin_config, mask=mask)
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.ReconfigureBasin,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         return basin_config_schema(response.config)
 
@@ -412,7 +405,7 @@ class Basin:
     __slots__ = (
         "_channel",
         "_config",
-        "_retrying_caller",
+        "_retrier",
         "_stub",
         "_name",
     )
@@ -426,8 +419,9 @@ class Basin:
     ) -> None:
         self._channel = channel
         self._config = config
-        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
-            _grpc_retry_on
+        self._retrier = Retrier(
+            should_retry_on=_grpc_retry_on,
+            max_attempts=config.max_retries,
         )
         self._stub = BasinServiceStub(self._channel)
         self._name = name
@@ -472,7 +466,7 @@ class Basin:
         metadata = self._config.stub_kwargs["metadata"] + [
             ("s2-request-token", _s2_request_token())
         ]
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.CreateStream,
             request,
             timeout=self._config.stub_kwargs["timeout"],
@@ -527,11 +521,10 @@ class Basin:
         request = ListStreamsRequest(
             prefix=prefix, start_after=start_after, limit=limit
         )
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.ListStreams,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         return schemas.Page(
             items=[stream_info_schema(s) for s in response.streams],
@@ -550,11 +543,10 @@ class Basin:
             Stream deletion is asynchronous, and may take a few minutes to complete.
         """
         request = DeleteStreamRequest(stream=name)
-        await self._retrying_caller(
+        await self._retrier(
             self._stub.DeleteStream,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
 
     @fallible
@@ -566,11 +558,10 @@ class Basin:
             name: Name of the stream.
         """
         request = GetStreamConfigRequest(stream=name)
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.GetStreamConfig,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         return stream_config_schema(response.config)
 
@@ -599,11 +590,10 @@ class Basin:
             stream_config_message(storage_class, retention_age, return_mask=True),
         )
         request = ReconfigureStreamRequest(stream=name, config=stream_config, mask=mask)
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.ReconfigureStream,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         return stream_config_schema(response.config)
 
@@ -617,15 +607,16 @@ class Stream:
     __slots__ = (
         "_name",
         "_config",
-        "_retrying_caller",
+        "_retrier",
         "_stub",
     )
 
     def __init__(self, name: str, channel: Channel, config: _Config) -> None:
         self._name = name
         self._config = config
-        self._retrying_caller = AsyncRetryingCaller(**self._config.retry_kwargs).on(
-            _grpc_retry_on
+        self._retrier = Retrier(
+            should_retry_on=_grpc_retry_on,
+            max_attempts=config.max_retries,
         )
         self._stub = StreamServiceStub(channel)
 
@@ -644,11 +635,8 @@ class Stream:
             Sequence number that will be assigned to the next record on a stream.
         """
         request = CheckTailRequest(stream=self.name)
-        response = await self._retrying_caller(
-            self._stub.CheckTail,
-            request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+        response = await self._retrier(
+            self._stub.CheckTail, request, **self._config.stub_kwargs
         )
         return response.next_seq_num
 
@@ -660,56 +648,109 @@ class Stream:
         _validate_append_input(input)
         request = AppendRequest(input=append_input_message(self.name, input))
         response = (
-            await self._retrying_caller(
+            await self._retrier(
                 self._stub.Append,
                 request,
-                timeout=self._config.stub_kwargs["timeout"],
-                metadata=self._config.stub_kwargs["metadata"],
+                **self._config.stub_kwargs,
             )
             if self._config.enable_append_retries
             else await self._stub.Append(
                 request,
-                timeout=self._config.stub_kwargs["timeout"],
-                metadata=self._config.stub_kwargs["metadata"],
+                **self._config.stub_kwargs,
             )
         )
         return append_output_schema(response.output)
 
-    async def _retrying_append_session_inner(
+    async def _append_session(
         self,
+        attempt: Attempt,
         inflight_inputs: deque[schemas.AppendInput],
-        requests: AsyncIterable[AppendSessionRequest] | Iterable[AppendSessionRequest],
-    ) -> AsyncIterable[schemas.AppendOutput]:
+        request_rx: MemoryObjectReceiveStream[AppendSessionRequest],
+        output_tx: MemoryObjectSendStream[schemas.AppendOutput],
+    ):
         async for response in self._stub.AppendSession(
-            requests, metadata=self._config.stub_kwargs["metadata"]
+            request_rx, metadata=self._config.stub_kwargs["metadata"]
         ):
+            if attempt.value > 0:
+                attempt.value = 0
             output = response.output
             corresponding_input = inflight_inputs.popleft()
             num_records_sent = len(corresponding_input.records)
             num_records_ackd = output.end_seq_num - output.start_seq_num
             if num_records_sent == num_records_ackd:
-                yield append_output_schema(output)
+                await output_tx.send(append_output_schema(response.output))
             else:
-                raise ValueError(
+                raise RuntimeError(
                     "Number of records sent doesn't match the number of acknowledgements received"
                 )
 
-    async def _retrying_append_session(
-        self, inputs: AsyncIterable[schemas.AppendInput]
-    ) -> AsyncIterable[schemas.AppendOutput]:
+    async def _retrying_append_session_inner(
+        self,
+        input_rx: MemoryObjectReceiveStream[schemas.AppendInput],
+        output_tx: MemoryObjectSendStream[schemas.AppendOutput],
+    ):
         inflight_inputs: deque[schemas.AppendInput] = deque()
-        async for attempt in retry_context(_grpc_retry_on, **self._config.retry_kwargs):
-            with attempt:
-                if len(inflight_inputs) != 0:
-                    async for output in self._retrying_append_session_inner(
-                        inflight_inputs,
-                        _append_session_request_iter(self.name, inflight_inputs),
+        max_attempts = self._config.max_retries
+        backoffs = compute_backoffs(max_attempts)
+        attempt = Attempt(value=0)
+        async with output_tx:
+            while True:
+                request_tx, request_rx = create_memory_object_stream[
+                    AppendSessionRequest
+                ](max_buffer_size=_MEMORY_STREAM_MAX_BUF_SIZE)
+                try:
+                    async with create_task_group() as tg:
+                        tg.start_soon(
+                            self._append_session,
+                            attempt,
+                            inflight_inputs,
+                            request_rx,
+                            output_tx,
+                        )
+                        async with request_tx:
+                            if len(inflight_inputs) > 0:
+                                for input in list(inflight_inputs):
+                                    await request_tx.send(
+                                        AppendSessionRequest(
+                                            input=append_input_message(self.name, input)
+                                        )
+                                    )
+                            async for input in input_rx:
+                                inflight_inputs.append(input)
+                                await request_tx.send(
+                                    AppendSessionRequest(
+                                        input=append_input_message(self.name, input)
+                                    )
+                                )
+                    return
+                except* AioRpcError as eg:
+                    if attempt.value < max_attempts and any(
+                        _grpc_retry_on(e) for e in eg.exceptions
                     ):
-                        yield output
-                async for output in self._retrying_append_session_inner(
-                    inflight_inputs,
-                    _append_session_request_aiter(self.name, inputs, inflight_inputs),
-                ):
+                        await asyncio.sleep(backoffs[attempt.value])
+                        attempt.value += 1
+                    else:
+                        raise eg
+
+    async def _retrying_append_session(
+        self,
+        inputs: AsyncIterable[schemas.AppendInput],
+    ) -> AsyncIterable[schemas.AppendOutput]:
+        input_tx, input_rx = create_memory_object_stream[schemas.AppendInput](
+            max_buffer_size=_MEMORY_STREAM_MAX_BUF_SIZE
+        )
+        output_tx, output_rx = create_memory_object_stream[schemas.AppendOutput](
+            max_buffer_size=_MEMORY_STREAM_MAX_BUF_SIZE
+        )
+        async with create_task_group() as tg:
+            tg.start_soon(
+                self._retrying_append_session_inner,
+                input_rx,
+                output_tx,
+            )
+            tg.start_soon(_pipe_append_inputs, inputs, input_tx)
+            async with output_rx:
+                async for output in output_rx:
                     yield output
 
     @fallible
@@ -780,11 +821,10 @@ class Stream:
             start_seq_num=start_seq_num,
             limit=read_limit_message(limit),
         )
-        response = await self._retrying_caller(
+        response = await self._retrier(
             self._stub.Read,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            **self._config.stub_kwargs,
         )
         output = response.output
         match output.WhichOneof("output"):
@@ -795,15 +835,9 @@ class Stream:
             case "next_seq_num":
                 return schemas.NextSeqNum(output.next_seq_num)
             case _:
-                raise ValueError("Read output doesn't match any of the expected values")
-
-    async def _read_session(
-        self, request: ReadSessionRequest
-    ) -> AsyncIterable[ReadSessionResponse]:
-        async for response in self._stub.ReadSession(
-            request, metadata=self._config.stub_kwargs["metadata"]
-        ):
-            yield response
+                raise RuntimeError(
+                    "Read output doesn't match any of the expected values"
+                )
 
     @fallible
     async def read_session(
@@ -854,9 +888,16 @@ class Stream:
             start_seq_num=start_seq_num,
             limit=read_limit_message(limit),
         )
-        async for attempt in retry_context(_grpc_retry_on, **self._config.retry_kwargs):
-            with attempt:
-                async for response in self._read_session(request):
+        max_attempts = self._config.max_retries
+        backoffs = compute_backoffs(max_attempts)
+        attempt = 0
+        while True:
+            try:
+                async for response in self._stub.ReadSession(
+                    request, metadata=self._config.stub_kwargs["metadata"]
+                ):
+                    if attempt > 0:
+                        attempt = 0
                     output = response.output
                     match output.WhichOneof("output"):
                         case "batch":
@@ -872,6 +913,12 @@ class Stream:
                             yield schemas.NextSeqNum(output.next_seq_num)
                             return
                         case _:
-                            raise ValueError(
+                            raise RuntimeError(
                                 "Read output doesn't match any of the expected values"
                             )
+            except Exception as e:
+                if attempt < max_attempts and _grpc_retry_on(e):
+                    await asyncio.sleep(backoffs[attempt])
+                    attempt += 1
+                else:
+                    raise e
