@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2025-02-11
+
+### Features
+
+- [**breaking**] Accept `Endpoints` instead of `Cloud` in `S2` init  ([#32](https://github.com/s2-streamstore/s2-sdk-python/issues/32))
+
+### Bug Fixes
+
+- [**breaking**] Retry logic for append session and read session ([#33](https://github.com/s2-streamstore/s2-sdk-python/issues/33))
+
+### Miscellaneous Tasks
+
+- Consistent err kind and style in read session example  ([#34](https://github.com/s2-streamstore/s2-sdk-python/issues/34))
+
 ## [1.1.0] - 2025-01-25
 
 ### Features
