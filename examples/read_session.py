@@ -20,8 +20,8 @@ async def consumer():
                     total_num_records += len(records)
                     print(f"read {len(records)} now, {total_num_records} so far")
                 case _:
-                    raise ValueError(
-                        "records not received, which is unexpected as we start from the tail of the stream"
+                    raise RuntimeError(
+                        "Records not received, which is unexpected as we start from the tail of the stream"
                     )
 
 
