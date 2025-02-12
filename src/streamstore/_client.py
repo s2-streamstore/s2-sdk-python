@@ -10,7 +10,7 @@ from typing import Self, TypedDict, cast
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from google.protobuf.field_mask_pb2 import FieldMask
-from grpc import StatusCode, ssl_channel_credentials
+from grpc import StatusCode, ssl_channel_credentials, Compression
 from grpc.aio import AioRpcError, Channel, secure_channel
 
 from streamstore import schemas
@@ -135,6 +135,7 @@ class _Config:
     stub_kwargs: _StubKwargs
     max_retries: int
     enable_append_retries: bool
+    compression: bool
 
 
 class S2:
@@ -167,6 +168,7 @@ class S2:
         request_timeout: timedelta = timedelta(seconds=5.0),
         max_retries: int = 3,
         enable_append_retries: bool = True,
+        compression: bool = False,
     ) -> None:
         self._endpoints = (
             endpoints
@@ -185,6 +187,7 @@ class S2:
             },
             max_retries=max_retries,
             enable_append_retries=enable_append_retries,
+            compression=compression,
         )
         self._stub = AccountServiceStub(self._account_channel)
         self._retrier = Retrier(
@@ -647,15 +650,18 @@ class Stream:
         """
         _validate_append_input(input)
         request = AppendRequest(input=append_input_message(self.name, input))
+        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         response = (
             await self._retrier(
                 self._stub.Append,
                 request,
+                compression=compression,
                 **self._config.stub_kwargs,
             )
             if self._config.enable_append_retries
             else await self._stub.Append(
                 request,
+                compression=compression,
                 **self._config.stub_kwargs,
             )
         )
@@ -668,8 +674,11 @@ class Stream:
         request_rx: MemoryObjectReceiveStream[AppendSessionRequest],
         output_tx: MemoryObjectSendStream[schemas.AppendOutput],
     ):
+        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         async for response in self._stub.AppendSession(
-            request_rx, metadata=self._config.stub_kwargs["metadata"]
+            request_rx,
+            metadata=self._config.stub_kwargs["metadata"],
+            compression=compression,
         ):
             if attempt.value > 0:
                 attempt.value = 0
@@ -821,9 +830,11 @@ class Stream:
             start_seq_num=start_seq_num,
             limit=read_limit_message(limit),
         )
+        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         response = await self._retrier(
             self._stub.Read,
             request,
+            compression=compression,
             **self._config.stub_kwargs,
         )
         output = response.output
@@ -891,10 +902,13 @@ class Stream:
         max_attempts = self._config.max_retries
         backoffs = compute_backoffs(max_attempts)
         attempt = 0
+        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         while True:
             try:
                 async for response in self._stub.ReadSession(
-                    request, metadata=self._config.stub_kwargs["metadata"]
+                    request,
+                    metadata=self._config.stub_kwargs["metadata"],
+                    compression=compression,
                 ):
                     if attempt > 0:
                         attempt = 0
