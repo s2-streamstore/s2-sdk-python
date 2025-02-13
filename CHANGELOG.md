@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2025-02-13
+
+### Features
+
+- Support Gzip compression for read* and append* ops ([#36](https://github.com/s2-streamstore/s2-sdk-python/issues/36))
+
 ## [2.0.0] - 2025-02-11
 
 ### Features
