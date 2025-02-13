@@ -5,7 +5,7 @@ from collections import deque
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Self, TypedDict, cast
+from typing import Self, cast
 
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -125,17 +125,18 @@ def _prepare_read_session_request_for_retry(
             )
 
 
-class _StubKwargs(TypedDict):
+@dataclass(slots=True)
+class _RpcConfig:
     timeout: float
     metadata: list[tuple[str, str]]
+    compression: Compression
 
 
 @dataclass(slots=True)
 class _Config:
-    stub_kwargs: _StubKwargs
     max_retries: int
     enable_append_retries: bool
-    compression: bool
+    rpc: _RpcConfig
 
 
 class S2:
@@ -149,6 +150,8 @@ class S2:
         max_retries: Maximum number of retries for a gRPC request. Default value is 3.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
+        enable_compression: Enable compression (Gzip) for :meth:`.Stream.append`, :meth:`.Stream.append_session`,
+            :meth:`.Stream.read`, and :meth:`.Stream.read_session`. Default value is False.
     """
 
     __slots__ = (
@@ -168,7 +171,7 @@ class S2:
         request_timeout: timedelta = timedelta(seconds=5.0),
         max_retries: int = 3,
         enable_append_retries: bool = True,
-        compression: bool = False,
+        enable_compression: bool = False,
     ) -> None:
         self._endpoints = (
             endpoints
@@ -181,13 +184,15 @@ class S2:
         )
         self._basin_channels: dict[str, Channel] = {}
         self._config = _Config(
-            stub_kwargs={
-                "timeout": request_timeout.total_seconds(),
-                "metadata": [("authorization", f"Bearer {auth_token}")],
-            },
             max_retries=max_retries,
             enable_append_retries=enable_append_retries,
-            compression=compression,
+            rpc=_RpcConfig(
+                timeout=request_timeout.total_seconds(),
+                metadata=[("authorization", f"Bearer {auth_token}")],
+                compression=Compression.Gzip
+                if enable_compression
+                else Compression.NoCompression,
+            ),
         )
         self._stub = AccountServiceStub(self._account_channel)
         self._retrier = Retrier(
@@ -256,13 +261,13 @@ class S2:
                 ),
             ),
         )
-        metadata = self._config.stub_kwargs["metadata"] + [
+        metadata = self._config.rpc.metadata + [
             ("s2-request-token", _s2_request_token())
         ]
         response = await self._retrier(
             self._stub.CreateBasin,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
+            timeout=self._config.rpc.timeout,
             metadata=metadata,
         )
         return basin_info_schema(response.info)
@@ -320,7 +325,8 @@ class S2:
         response = await self._retrier(
             self._stub.ListBasins,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return schemas.Page(
             items=[basin_info_schema(b) for b in response.basins],
@@ -342,7 +348,8 @@ class S2:
         await self._retrier(
             self._stub.DeleteBasin,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
 
     @fallible
@@ -357,8 +364,8 @@ class S2:
         response = await self._retrier(
             self._stub.GetBasinConfig,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
-            metadata=self._config.stub_kwargs["metadata"],
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return basin_config_schema(response.config)
 
@@ -394,7 +401,8 @@ class S2:
         response = await self._retrier(
             self._stub.ReconfigureBasin,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return basin_config_schema(response.config)
 
@@ -466,13 +474,13 @@ class Basin:
                 StreamConfig, stream_config_message(storage_class, retention_age)
             ),
         )
-        metadata = self._config.stub_kwargs["metadata"] + [
+        metadata = self._config.rpc.metadata + [
             ("s2-request-token", _s2_request_token())
         ]
         response = await self._retrier(
             self._stub.CreateStream,
             request,
-            timeout=self._config.stub_kwargs["timeout"],
+            timeout=self._config.rpc.timeout,
             metadata=metadata,
         )
         return stream_info_schema(response.info)
@@ -527,7 +535,8 @@ class Basin:
         response = await self._retrier(
             self._stub.ListStreams,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return schemas.Page(
             items=[stream_info_schema(s) for s in response.streams],
@@ -549,7 +558,8 @@ class Basin:
         await self._retrier(
             self._stub.DeleteStream,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
 
     @fallible
@@ -564,7 +574,8 @@ class Basin:
         response = await self._retrier(
             self._stub.GetStreamConfig,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return stream_config_schema(response.config)
 
@@ -596,7 +607,8 @@ class Basin:
         response = await self._retrier(
             self._stub.ReconfigureStream,
             request,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return stream_config_schema(response.config)
 
@@ -639,7 +651,10 @@ class Stream:
         """
         request = CheckTailRequest(stream=self.name)
         response = await self._retrier(
-            self._stub.CheckTail, request, **self._config.stub_kwargs
+            self._stub.CheckTail,
+            request,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
         )
         return response.next_seq_num
 
@@ -650,19 +665,20 @@ class Stream:
         """
         _validate_append_input(input)
         request = AppendRequest(input=append_input_message(self.name, input))
-        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         response = (
             await self._retrier(
                 self._stub.Append,
                 request,
-                compression=compression,
-                **self._config.stub_kwargs,
+                timeout=self._config.rpc.timeout,
+                metadata=self._config.rpc.metadata,
+                compression=self._config.rpc.compression,
             )
             if self._config.enable_append_retries
             else await self._stub.Append(
                 request,
-                compression=compression,
-                **self._config.stub_kwargs,
+                timeout=self._config.rpc.timeout,
+                metadata=self._config.rpc.metadata,
+                compression=self._config.rpc.compression,
             )
         )
         return append_output_schema(response.output)
@@ -674,11 +690,10 @@ class Stream:
         request_rx: MemoryObjectReceiveStream[AppendSessionRequest],
         output_tx: MemoryObjectSendStream[schemas.AppendOutput],
     ):
-        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         async for response in self._stub.AppendSession(
             request_rx,
-            metadata=self._config.stub_kwargs["metadata"],
-            compression=compression,
+            metadata=self._config.rpc.metadata,
+            compression=self._config.rpc.compression,
         ):
             if attempt.value > 0:
                 attempt.value = 0
@@ -792,7 +807,8 @@ class Stream:
         else:
             async for response in self._stub.AppendSession(
                 _append_session_request_aiter(self.name, inputs),
-                metadata=self._config.stub_kwargs["metadata"],
+                metadata=self._config.rpc.metadata,
+                compression=self._config.rpc.compression,
             ):
                 yield append_output_schema(response.output)
 
@@ -830,12 +846,12 @@ class Stream:
             start_seq_num=start_seq_num,
             limit=read_limit_message(limit),
         )
-        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         response = await self._retrier(
             self._stub.Read,
             request,
-            compression=compression,
-            **self._config.stub_kwargs,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
+            compression=self._config.rpc.compression,
         )
         output = response.output
         match output.WhichOneof("output"):
@@ -902,13 +918,12 @@ class Stream:
         max_attempts = self._config.max_retries
         backoffs = compute_backoffs(max_attempts)
         attempt = 0
-        compression = Compression.Gzip if self._config.compression else Compression.NoCompression
         while True:
             try:
                 async for response in self._stub.ReadSession(
                     request,
-                    metadata=self._config.stub_kwargs["metadata"],
-                    compression=compression,
+                    metadata=self._config.rpc.metadata,
+                    compression=self._config.rpc.compression,
                 ):
                     if attempt > 0:
                         attempt = 0
