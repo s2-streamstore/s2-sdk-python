@@ -365,18 +365,21 @@ class ReadLimit(_message.Message):
     ) -> None: ...
 
 class ReadSessionRequest(_message.Message):
-    __slots__ = ("stream", "start_seq_num", "limit")
+    __slots__ = ("stream", "start_seq_num", "limit", "heartbeats")
     STREAM_FIELD_NUMBER: _ClassVar[int]
     START_SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
     LIMIT_FIELD_NUMBER: _ClassVar[int]
+    HEARTBEATS_FIELD_NUMBER: _ClassVar[int]
     stream: str
     start_seq_num: int
     limit: ReadLimit
+    heartbeats: bool
     def __init__(
         self,
         stream: _Optional[str] = ...,
         start_seq_num: _Optional[int] = ...,
         limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
+        heartbeats: bool = ...,
     ) -> None: ...
 
 class ReadSessionResponse(_message.Message):
