@@ -4,7 +4,6 @@
 import grpc
 import warnings
 
-# TODO: had to manually replace the below statement. revisit.
 from streamstore._lib.s2.v1alpha import s2_pb2 as s2_dot_v1alpha_dot_s2__pb2
 
 GRPC_GENERATED_VERSION = "1.69.0"
