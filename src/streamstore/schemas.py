@@ -137,6 +137,15 @@ class Page(Generic[T]):
     has_more: bool
 
 
+class BasinScope(DocEnum):
+    """
+    Scope of a basin.
+    """
+
+    UNSPECIFIED = 0, "``UNSPECIFIED`` defaults to ``AWS_US_EAST_1``."
+    AWS_US_EAST_1 = 1, "AWS ``us-east-1`` region."
+
+
 class BasinState(DocEnum):
     """
     Current state of a basin.
@@ -146,15 +155,6 @@ class BasinState(DocEnum):
     ACTIVE = 1
     CREATING = 2
     DELETING = 3
-
-
-class BasinScope(DocEnum):
-    """
-    Scope of a basin.
-    """
-
-    UNSPECIFIED = 0, "``UNSPECIFIED`` defaults to ``AWS_US_EAST_1``."
-    AWS_US_EAST_1 = 1, "AWS ``us-east-1`` region."
 
 
 @dataclass(slots=True)
@@ -190,7 +190,7 @@ class StorageClass(DocEnum):
     Storage class for recent appends.
     """
 
-    UNSPECIFIED = 0, "``UNSPECIFIED`` gets overridden to ``EXPRESS``."
+    UNSPECIFIED = 0, "``UNSPECIFIED`` defaults to ``EXPRESS``."
     STANDARD = 1, "Offers end-to-end latencies under 500 ms."
     EXPRESS = 2, "Offers end-to-end latencies under 50 ms."
 
@@ -215,6 +215,9 @@ class BasinConfig:
 
     #: Default configuration for streams in this basin.
     default_stream_config: StreamConfig
+
+    #: Create stream on append if it doesn't exist, using the default stream configuration.
+    create_stream_on_append: bool
 
 
 class Cloud(DocEnum):

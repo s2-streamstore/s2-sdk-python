@@ -407,11 +407,15 @@ class StreamConfig(_message.Message):
     ) -> None: ...
 
 class BasinConfig(_message.Message):
-    __slots__ = ("default_stream_config",)
+    __slots__ = ("default_stream_config", "create_stream_on_append")
     DEFAULT_STREAM_CONFIG_FIELD_NUMBER: _ClassVar[int]
+    CREATE_STREAM_ON_APPEND_FIELD_NUMBER: _ClassVar[int]
     default_stream_config: StreamConfig
+    create_stream_on_append: bool
     def __init__(
-        self, default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...
+        self,
+        default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...,
+        create_stream_on_append: bool = ...,
     ) -> None: ...
 
 class BasinInfo(_message.Message):
