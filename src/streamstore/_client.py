@@ -237,6 +237,7 @@ class S2:
         name: str,
         default_stream_storage_class: schemas.StorageClass | None = None,
         default_stream_retention_age: timedelta | None = None,
+        create_stream_on_append: bool = False,
     ) -> schemas.BasinInfo:
         """
         Create a basin.
@@ -246,6 +247,7 @@ class S2:
             default_stream_storage_class: Default storage class for streams of this basin.
             default_stream_retention_age: Default threshold for automatic trimming of records in the
                 streams of this basin. If not specified, streams will have infinite retention.
+            create_stream_on_append: Create stream on append if it doesn't exist.
 
         Note:
             **name** must be globally unique and must be between 8 and 48 characters, comprising lowercase
@@ -257,7 +259,9 @@ class S2:
             config=cast(
                 BasinConfig,
                 basin_config_message(
-                    default_stream_storage_class, default_stream_retention_age
+                    default_stream_storage_class,
+                    default_stream_retention_age,
+                    create_stream_on_append,
                 ),
             ),
         )
@@ -375,6 +379,7 @@ class S2:
         name: str,
         default_stream_storage_class: schemas.StorageClass | None = None,
         default_stream_retention_age: timedelta | None = None,
+        create_stream_on_append: bool = False,
     ) -> schemas.BasinConfig:
         """
         Modify the configuration of a basin.
@@ -382,8 +387,9 @@ class S2:
         Args:
             name: Name of the basin.
             default_stream_storage_class: Default storage class for streams of this basin.
-            default_stream_retention_age: Default threshold for automatic trimming of records in the streams of this basin.
-                If not specified, streams will have infinite retention.
+            default_stream_retention_age: Default threshold for automatic trimming of records in the
+                streams of this basin. If not specified, streams will have infinite retention.
+            create_stream_on_append: Create stream on append if it doesn't exist.
 
         Note:
             Modifiying the default stream-related configuration doesn't affect already existing streams;
@@ -394,6 +400,7 @@ class S2:
             basin_config_message(
                 default_stream_storage_class,
                 default_stream_retention_age,
+                create_stream_on_append,
                 return_mask=True,
             ),
         )
