@@ -9,6 +9,7 @@ from streamstore.schemas import (
     AppendOutput,
     BasinConfig,
     BasinInfo,
+    BasinScope,
     BasinState,
     ReadLimit,
     Record,
@@ -43,7 +44,7 @@ def read_limit_message(limit: ReadLimit | None) -> msgs.ReadLimit:
 
 
 def basin_info_schema(info: msgs.BasinInfo) -> BasinInfo:
-    return BasinInfo(info.name, info.scope, info.cell, BasinState(info.state))
+    return BasinInfo(info.name, BasinScope(info.scope), BasinState(info.state))
 
 
 def stream_info_schema(info: msgs.StreamInfo) -> StreamInfo:
