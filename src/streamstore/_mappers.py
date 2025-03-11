@@ -76,6 +76,7 @@ def stream_config_message(
 def basin_config_message(
     default_stream_storage_class: StorageClass | None,
     default_stream_retention_age: timedelta | None = None,
+    create_stream_on_append: bool = False,
     return_mask: bool = False,
 ) -> msgs.BasinConfig | tuple[msgs.BasinConfig, FieldMask]:
     paths = []
@@ -86,7 +87,12 @@ def basin_config_message(
     if default_stream_retention_age is not None:
         paths.append("default_stream_config.retention_policy")
         stream_config.age = int(default_stream_retention_age.total_seconds())
-    basin_config = msgs.BasinConfig(default_stream_config=stream_config)
+    if create_stream_on_append is True:
+        paths.append("create_stream_on_append")
+    basin_config = msgs.BasinConfig(
+        default_stream_config=stream_config,
+        create_stream_on_append=create_stream_on_append,
+    )
     if return_mask:
         return (basin_config, FieldMask(paths=paths))
     return basin_config
@@ -100,7 +106,10 @@ def stream_config_schema(config: msgs.StreamConfig) -> StreamConfig:
 
 
 def basin_config_schema(config: msgs.BasinConfig) -> BasinConfig:
-    return BasinConfig(stream_config_schema(config.default_stream_config))
+    return BasinConfig(
+        stream_config_schema(config.default_stream_config),
+        config.create_stream_on_append,
+    )
 
 
 def append_output_schema(output: msgs.AppendOutput) -> AppendOutput:
