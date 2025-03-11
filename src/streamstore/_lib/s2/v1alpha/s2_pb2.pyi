@@ -13,6 +13,11 @@ from typing import (
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class BasinScope(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    BASIN_SCOPE_UNSPECIFIED: _ClassVar[BasinScope]
+    BASIN_SCOPE_AWS_US_EAST_1: _ClassVar[BasinScope]
+
 class StorageClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     STORAGE_CLASS_UNSPECIFIED: _ClassVar[StorageClass]
@@ -26,6 +31,8 @@ class BasinState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     BASIN_STATE_CREATING: _ClassVar[BasinState]
     BASIN_STATE_DELETING: _ClassVar[BasinState]
 
+BASIN_SCOPE_UNSPECIFIED: BasinScope
+BASIN_SCOPE_AWS_US_EAST_1: BasinScope
 STORAGE_CLASS_UNSPECIFIED: StorageClass
 STORAGE_CLASS_STANDARD: StorageClass
 STORAGE_CLASS_EXPRESS: StorageClass
@@ -62,21 +69,18 @@ class ListBasinsResponse(_message.Message):
     ) -> None: ...
 
 class CreateBasinRequest(_message.Message):
-    __slots__ = ("basin", "config", "scope", "cell")
+    __slots__ = ("basin", "config", "scope")
     BASIN_FIELD_NUMBER: _ClassVar[int]
     CONFIG_FIELD_NUMBER: _ClassVar[int]
     SCOPE_FIELD_NUMBER: _ClassVar[int]
-    CELL_FIELD_NUMBER: _ClassVar[int]
     basin: str
     config: BasinConfig
-    scope: str
-    cell: str
+    scope: BasinScope
     def __init__(
         self,
         basin: _Optional[str] = ...,
         config: _Optional[_Union[BasinConfig, _Mapping]] = ...,
-        scope: _Optional[str] = ...,
-        cell: _Optional[str] = ...,
+        scope: _Optional[_Union[BasinScope, str]] = ...,
     ) -> None: ...
 
 class CreateBasinResponse(_message.Message):
@@ -365,18 +369,21 @@ class ReadLimit(_message.Message):
     ) -> None: ...
 
 class ReadSessionRequest(_message.Message):
-    __slots__ = ("stream", "start_seq_num", "limit")
+    __slots__ = ("stream", "start_seq_num", "limit", "heartbeats")
     STREAM_FIELD_NUMBER: _ClassVar[int]
     START_SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
     LIMIT_FIELD_NUMBER: _ClassVar[int]
+    HEARTBEATS_FIELD_NUMBER: _ClassVar[int]
     stream: str
     start_seq_num: int
     limit: ReadLimit
+    heartbeats: bool
     def __init__(
         self,
         stream: _Optional[str] = ...,
         start_seq_num: _Optional[int] = ...,
         limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
+        heartbeats: bool = ...,
     ) -> None: ...
 
 class ReadSessionResponse(_message.Message):
@@ -400,28 +407,29 @@ class StreamConfig(_message.Message):
     ) -> None: ...
 
 class BasinConfig(_message.Message):
-    __slots__ = ("default_stream_config",)
+    __slots__ = ("default_stream_config", "create_stream_on_append")
     DEFAULT_STREAM_CONFIG_FIELD_NUMBER: _ClassVar[int]
+    CREATE_STREAM_ON_APPEND_FIELD_NUMBER: _ClassVar[int]
     default_stream_config: StreamConfig
+    create_stream_on_append: bool
     def __init__(
-        self, default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...
+        self,
+        default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...,
+        create_stream_on_append: bool = ...,
     ) -> None: ...
 
 class BasinInfo(_message.Message):
-    __slots__ = ("name", "scope", "cell", "state")
+    __slots__ = ("name", "scope", "state")
     NAME_FIELD_NUMBER: _ClassVar[int]
     SCOPE_FIELD_NUMBER: _ClassVar[int]
-    CELL_FIELD_NUMBER: _ClassVar[int]
     STATE_FIELD_NUMBER: _ClassVar[int]
     name: str
-    scope: str
-    cell: str
+    scope: BasinScope
     state: BasinState
     def __init__(
         self,
         name: _Optional[str] = ...,
-        scope: _Optional[str] = ...,
-        cell: _Optional[str] = ...,
+        scope: _Optional[_Union[BasinScope, str]] = ...,
         state: _Optional[_Union[BasinState, str]] = ...,
     ) -> None: ...
 
