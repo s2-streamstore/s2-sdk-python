@@ -7,6 +7,7 @@ __all__ = [
     "FirstSeqNum",
     "NextSeqNum",
     "Page",
+    "BasinScope",
     "BasinState",
     "BasinInfo",
     "StreamInfo",
@@ -147,6 +148,15 @@ class BasinState(DocEnum):
     DELETING = 3
 
 
+class BasinScope(DocEnum):
+    """
+    Scope of a basin.
+    """
+
+    UNSPECIFIED = 0, "``UNSPECIFIED`` defaults to ``AWS_US_EAST_1``."
+    AWS_US_EAST_1 = 1, "AWS ``us-east-1`` region."
+
+
 @dataclass(slots=True)
 class BasinInfo:
     """
@@ -156,9 +166,7 @@ class BasinInfo:
     #: Basin name.
     name: str
     #: Basin scope.
-    scope: str
-    #: Cell assignment.
-    cell: str
+    scope: BasinScope
     #: Basin state.
     state: BasinState
 
