@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2025-03-11
+
+### Refactor
+
+- [**breaking**] Modify `BasinInfo` schema ([#43](https://github.com/s2-streamstore/s2-sdk-python/issues/43))
+
+### Features
+
+- Support `create_stream_on_append` basin config ([#44](https://github.com/s2-streamstore/s2-sdk-python/issues/44))
+
 ## [2.1.0] - 2025-02-13
 
 ### Features
