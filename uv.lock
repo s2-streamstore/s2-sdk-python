@@ -1022,7 +1022,7 @@ requires-dist = [
     { name = "grpcio", specifier = ">=1.69.0" },
     { name = "grpcio-tools", specifier = ">=1.69.0" },
     { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=4.0.0" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.1.3" },
+    { name = "sphinx", marker = "extra == 'docs'", specifier = "==8.1.3" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'", specifier = ">=3.0.0" },
     { name = "types-protobuf", specifier = ">=5.29.1.20241207" },
 ]
