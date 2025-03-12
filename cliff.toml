@@ -38,8 +38,6 @@ trim = true
 postprocessors = [
   { pattern = '<REPO>', replace = "https://github.com/s2-streamstore/s2-sdk-python" },
 ]
-# output file path
-output = "CHANGELOG.md"
 
 [git]
 # parse the commits based on https://www.conventionalcommits.org
@@ -50,11 +48,6 @@ filter_unconventional = false
 split_commits = false
 # regex for preprocessing the commit messages
 commit_preprocessors = [
-  { pattern = '(update `README` \(#10\))', replace = "docs: $1" },
-  { pattern = '(organize imports and add a few external links in docs \(#7\))', replace = "chore: $1" },
-  { pattern = '(validate `AppendInput`, expose `metered_bytes`, misc. docs polish \(#8\))', replace = "chore: $1" },
-  { pattern = '(betterproto -> grpcio \(#5\))', replace = "refactor: swap gRPC dependency i.e. $1" },
-  { pattern = "initial commit", replace_command = '[ "$COMMIT_SHA" == "d05d55a8396ab276055c3aacd00b8d1951d15e7c" ] && echo "feat: Async S2 client with core functionalities ([d05d55a](https://github.com/s2-streamstore/s2-sdk-python/commit/d05d55a8396ab276055c3aacd00b8d1951d15e7c))" || echo "initial commit"' },
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = "([#${2}](<REPO>/issues/${2}))" },
 ]
 # regex for parsing and grouping commits
