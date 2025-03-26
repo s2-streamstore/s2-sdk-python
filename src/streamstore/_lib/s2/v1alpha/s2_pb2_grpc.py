@@ -2,6 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 
 import grpc
+import warnings
 
 from streamstore._lib.s2.v1alpha import s2_pb2 as s2_dot_v1alpha_dot_s2__pb2
 
@@ -21,7 +22,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f"The grpc package installed is at version {GRPC_VERSION},"
-        + " but the generated code in s2/v1alpha/s2_pb2_grpc.py depends on"
+        + f" but the generated code in s2/v1alpha/s2_pb2_grpc.py depends on"
         + f" grpcio>={GRPC_GENERATED_VERSION}."
         + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
         + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
