@@ -395,15 +395,18 @@ class ReadSessionResponse(_message.Message):
     ) -> None: ...
 
 class StreamConfig(_message.Message):
-    __slots__ = ("storage_class", "age")
+    __slots__ = ("storage_class", "age", "require_client_timestamps")
     STORAGE_CLASS_FIELD_NUMBER: _ClassVar[int]
     AGE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRE_CLIENT_TIMESTAMPS_FIELD_NUMBER: _ClassVar[int]
     storage_class: StorageClass
     age: int
+    require_client_timestamps: bool
     def __init__(
         self,
         storage_class: _Optional[_Union[StorageClass, str]] = ...,
         age: _Optional[int] = ...,
+        require_client_timestamps: bool = ...,
     ) -> None: ...
 
 class BasinConfig(_message.Message):
@@ -444,36 +447,46 @@ class Header(_message.Message):
     ) -> None: ...
 
 class AppendRecord(_message.Message):
-    __slots__ = ("headers", "body")
+    __slots__ = ("timestamp", "headers", "body")
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     HEADERS_FIELD_NUMBER: _ClassVar[int]
     BODY_FIELD_NUMBER: _ClassVar[int]
+    timestamp: int
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
     def __init__(
         self,
+        timestamp: _Optional[int] = ...,
         headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
         body: _Optional[bytes] = ...,
     ) -> None: ...
 
 class SequencedRecord(_message.Message):
-    __slots__ = ("seq_num", "headers", "body")
+    __slots__ = ("seq_num", "timestamp", "headers", "body")
     SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     HEADERS_FIELD_NUMBER: _ClassVar[int]
     BODY_FIELD_NUMBER: _ClassVar[int]
     seq_num: int
+    timestamp: int
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
     def __init__(
         self,
         seq_num: _Optional[int] = ...,
+        timestamp: _Optional[int] = ...,
         headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
         body: _Optional[bytes] = ...,
     ) -> None: ...
 
 class SequencedRecordBatch(_message.Message):
-    __slots__ = ("records",)
+    __slots__ = ("records", "next_seq_num")
     RECORDS_FIELD_NUMBER: _ClassVar[int]
+    NEXT_SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
     records: _containers.RepeatedCompositeFieldContainer[SequencedRecord]
+    next_seq_num: int
     def __init__(
-        self, records: _Optional[_Iterable[_Union[SequencedRecord, _Mapping]]] = ...
+        self,
+        records: _Optional[_Iterable[_Union[SequencedRecord, _Mapping]]] = ...,
+        next_seq_num: _Optional[int] = ...,
     ) -> None: ...
