@@ -18,6 +18,28 @@ class BasinScope(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     BASIN_SCOPE_UNSPECIFIED: _ClassVar[BasinScope]
     BASIN_SCOPE_AWS_US_EAST_1: _ClassVar[BasinScope]
 
+class Operation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    OPERATION_UNSPECIFIED: _ClassVar[Operation]
+    OPERATION_LIST_BASINS: _ClassVar[Operation]
+    OPERATION_CREATE_BASIN: _ClassVar[Operation]
+    OPERATION_DELETE_BASIN: _ClassVar[Operation]
+    OPERATION_RECONFIGURE_BASIN: _ClassVar[Operation]
+    OPERATION_GET_BASIN_CONFIG: _ClassVar[Operation]
+    OPERATION_ISSUE_ACCESS_TOKEN: _ClassVar[Operation]
+    OPERATION_REVOKE_ACCESS_TOKEN: _ClassVar[Operation]
+    OPERATION_LIST_ACCESS_TOKENS: _ClassVar[Operation]
+    OPERATION_LIST_STREAMS: _ClassVar[Operation]
+    OPERATION_CREATE_STREAM: _ClassVar[Operation]
+    OPERATION_DELETE_STREAM: _ClassVar[Operation]
+    OPERATION_GET_STREAM_CONFIG: _ClassVar[Operation]
+    OPERATION_RECONFIGURE_STREAM: _ClassVar[Operation]
+    OPERATION_CHECK_TAIL: _ClassVar[Operation]
+    OPERATION_APPEND: _ClassVar[Operation]
+    OPERATION_READ: _ClassVar[Operation]
+    OPERATION_TRIM: _ClassVar[Operation]
+    OPERATION_FENCE: _ClassVar[Operation]
+
 class StorageClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
     STORAGE_CLASS_UNSPECIFIED: _ClassVar[StorageClass]
@@ -33,6 +55,25 @@ class BasinState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
 
 BASIN_SCOPE_UNSPECIFIED: BasinScope
 BASIN_SCOPE_AWS_US_EAST_1: BasinScope
+OPERATION_UNSPECIFIED: Operation
+OPERATION_LIST_BASINS: Operation
+OPERATION_CREATE_BASIN: Operation
+OPERATION_DELETE_BASIN: Operation
+OPERATION_RECONFIGURE_BASIN: Operation
+OPERATION_GET_BASIN_CONFIG: Operation
+OPERATION_ISSUE_ACCESS_TOKEN: Operation
+OPERATION_REVOKE_ACCESS_TOKEN: Operation
+OPERATION_LIST_ACCESS_TOKENS: Operation
+OPERATION_LIST_STREAMS: Operation
+OPERATION_CREATE_STREAM: Operation
+OPERATION_DELETE_STREAM: Operation
+OPERATION_GET_STREAM_CONFIG: Operation
+OPERATION_RECONFIGURE_STREAM: Operation
+OPERATION_CHECK_TAIL: Operation
+OPERATION_APPEND: Operation
+OPERATION_READ: Operation
+OPERATION_TRIM: Operation
+OPERATION_FENCE: Operation
 STORAGE_CLASS_UNSPECIFIED: StorageClass
 STORAGE_CLASS_STANDARD: StorageClass
 STORAGE_CLASS_EXPRESS: StorageClass
@@ -135,6 +176,133 @@ class ReconfigureBasinResponse(_message.Message):
     def __init__(
         self, config: _Optional[_Union[BasinConfig, _Mapping]] = ...
     ) -> None: ...
+
+class IssueAccessTokenRequest(_message.Message):
+    __slots__ = ("info",)
+    INFO_FIELD_NUMBER: _ClassVar[int]
+    info: AccessTokenInfo
+    def __init__(
+        self, info: _Optional[_Union[AccessTokenInfo, _Mapping]] = ...
+    ) -> None: ...
+
+class ReadWritePermissions(_message.Message):
+    __slots__ = ("read", "write")
+    READ_FIELD_NUMBER: _ClassVar[int]
+    WRITE_FIELD_NUMBER: _ClassVar[int]
+    read: bool
+    write: bool
+    def __init__(self, read: bool = ..., write: bool = ...) -> None: ...
+
+class PermittedOperationGroups(_message.Message):
+    __slots__ = ("account", "basin", "stream")
+    ACCOUNT_FIELD_NUMBER: _ClassVar[int]
+    BASIN_FIELD_NUMBER: _ClassVar[int]
+    STREAM_FIELD_NUMBER: _ClassVar[int]
+    account: ReadWritePermissions
+    basin: ReadWritePermissions
+    stream: ReadWritePermissions
+    def __init__(
+        self,
+        account: _Optional[_Union[ReadWritePermissions, _Mapping]] = ...,
+        basin: _Optional[_Union[ReadWritePermissions, _Mapping]] = ...,
+        stream: _Optional[_Union[ReadWritePermissions, _Mapping]] = ...,
+    ) -> None: ...
+
+class RevokeAccessTokenRequest(_message.Message):
+    __slots__ = ("id",)
+    ID_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    def __init__(self, id: _Optional[str] = ...) -> None: ...
+
+class RevokeAccessTokenResponse(_message.Message):
+    __slots__ = ("info",)
+    INFO_FIELD_NUMBER: _ClassVar[int]
+    info: AccessTokenInfo
+    def __init__(
+        self, info: _Optional[_Union[AccessTokenInfo, _Mapping]] = ...
+    ) -> None: ...
+
+class ListAccessTokensRequest(_message.Message):
+    __slots__ = ("prefix", "start_after", "limit")
+    PREFIX_FIELD_NUMBER: _ClassVar[int]
+    START_AFTER_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    prefix: str
+    start_after: str
+    limit: int
+    def __init__(
+        self,
+        prefix: _Optional[str] = ...,
+        start_after: _Optional[str] = ...,
+        limit: _Optional[int] = ...,
+    ) -> None: ...
+
+class ListAccessTokensResponse(_message.Message):
+    __slots__ = ("tokens", "has_more")
+    TOKENS_FIELD_NUMBER: _ClassVar[int]
+    HAS_MORE_FIELD_NUMBER: _ClassVar[int]
+    tokens: _containers.RepeatedCompositeFieldContainer[AccessTokenInfo]
+    has_more: bool
+    def __init__(
+        self,
+        tokens: _Optional[_Iterable[_Union[AccessTokenInfo, _Mapping]]] = ...,
+        has_more: bool = ...,
+    ) -> None: ...
+
+class AccessTokenInfo(_message.Message):
+    __slots__ = ("id", "expires_at", "auto_prefix_streams", "scope")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    EXPIRES_AT_FIELD_NUMBER: _ClassVar[int]
+    AUTO_PREFIX_STREAMS_FIELD_NUMBER: _ClassVar[int]
+    SCOPE_FIELD_NUMBER: _ClassVar[int]
+    id: str
+    expires_at: int
+    auto_prefix_streams: bool
+    scope: AccessTokenScope
+    def __init__(
+        self,
+        id: _Optional[str] = ...,
+        expires_at: _Optional[int] = ...,
+        auto_prefix_streams: bool = ...,
+        scope: _Optional[_Union[AccessTokenScope, _Mapping]] = ...,
+    ) -> None: ...
+
+class AccessTokenScope(_message.Message):
+    __slots__ = ("basins", "streams", "tokens", "op_groups", "ops")
+    BASINS_FIELD_NUMBER: _ClassVar[int]
+    STREAMS_FIELD_NUMBER: _ClassVar[int]
+    TOKENS_FIELD_NUMBER: _ClassVar[int]
+    OP_GROUPS_FIELD_NUMBER: _ClassVar[int]
+    OPS_FIELD_NUMBER: _ClassVar[int]
+    basins: ResourceSet
+    streams: ResourceSet
+    tokens: ResourceSet
+    op_groups: PermittedOperationGroups
+    ops: _containers.RepeatedScalarFieldContainer[Operation]
+    def __init__(
+        self,
+        basins: _Optional[_Union[ResourceSet, _Mapping]] = ...,
+        streams: _Optional[_Union[ResourceSet, _Mapping]] = ...,
+        tokens: _Optional[_Union[ResourceSet, _Mapping]] = ...,
+        op_groups: _Optional[_Union[PermittedOperationGroups, _Mapping]] = ...,
+        ops: _Optional[_Iterable[_Union[Operation, str]]] = ...,
+    ) -> None: ...
+
+class ResourceSet(_message.Message):
+    __slots__ = ("exact", "prefix")
+    EXACT_FIELD_NUMBER: _ClassVar[int]
+    PREFIX_FIELD_NUMBER: _ClassVar[int]
+    exact: str
+    prefix: str
+    def __init__(
+        self, exact: _Optional[str] = ..., prefix: _Optional[str] = ...
+    ) -> None: ...
+
+class IssueAccessTokenResponse(_message.Message):
+    __slots__ = ("token",)
+    TOKEN_FIELD_NUMBER: _ClassVar[int]
+    token: str
+    def __init__(self, token: _Optional[str] = ...) -> None: ...
 
 class StreamInfo(_message.Message):
     __slots__ = ("name", "created_at", "deleted_at")
@@ -395,27 +563,37 @@ class ReadSessionResponse(_message.Message):
     ) -> None: ...
 
 class StreamConfig(_message.Message):
-    __slots__ = ("storage_class", "age")
+    __slots__ = ("storage_class", "age", "require_client_timestamps")
     STORAGE_CLASS_FIELD_NUMBER: _ClassVar[int]
     AGE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRE_CLIENT_TIMESTAMPS_FIELD_NUMBER: _ClassVar[int]
     storage_class: StorageClass
     age: int
+    require_client_timestamps: bool
     def __init__(
         self,
         storage_class: _Optional[_Union[StorageClass, str]] = ...,
         age: _Optional[int] = ...,
+        require_client_timestamps: bool = ...,
     ) -> None: ...
 
 class BasinConfig(_message.Message):
-    __slots__ = ("default_stream_config", "create_stream_on_append")
+    __slots__ = (
+        "default_stream_config",
+        "create_stream_on_append",
+        "create_stream_on_read",
+    )
     DEFAULT_STREAM_CONFIG_FIELD_NUMBER: _ClassVar[int]
     CREATE_STREAM_ON_APPEND_FIELD_NUMBER: _ClassVar[int]
+    CREATE_STREAM_ON_READ_FIELD_NUMBER: _ClassVar[int]
     default_stream_config: StreamConfig
     create_stream_on_append: bool
+    create_stream_on_read: bool
     def __init__(
         self,
         default_stream_config: _Optional[_Union[StreamConfig, _Mapping]] = ...,
         create_stream_on_append: bool = ...,
+        create_stream_on_read: bool = ...,
     ) -> None: ...
 
 class BasinInfo(_message.Message):
@@ -444,28 +622,34 @@ class Header(_message.Message):
     ) -> None: ...
 
 class AppendRecord(_message.Message):
-    __slots__ = ("headers", "body")
+    __slots__ = ("timestamp", "headers", "body")
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     HEADERS_FIELD_NUMBER: _ClassVar[int]
     BODY_FIELD_NUMBER: _ClassVar[int]
+    timestamp: int
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
     def __init__(
         self,
+        timestamp: _Optional[int] = ...,
         headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
         body: _Optional[bytes] = ...,
     ) -> None: ...
 
 class SequencedRecord(_message.Message):
-    __slots__ = ("seq_num", "headers", "body")
+    __slots__ = ("seq_num", "timestamp", "headers", "body")
     SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     HEADERS_FIELD_NUMBER: _ClassVar[int]
     BODY_FIELD_NUMBER: _ClassVar[int]
     seq_num: int
+    timestamp: int
     headers: _containers.RepeatedCompositeFieldContainer[Header]
     body: bytes
     def __init__(
         self,
         seq_num: _Optional[int] = ...,
+        timestamp: _Optional[int] = ...,
         headers: _Optional[_Iterable[_Union[Header, _Mapping]]] = ...,
         body: _Optional[bytes] = ...,
     ) -> None: ...
