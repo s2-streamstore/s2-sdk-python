@@ -12,7 +12,7 @@
   </p>
 </div>
 
-`streamstore` is the Python package that provides an async client for interacting with the [gRPC API](https://s2.dev/docs/interface/grpc) of [S2, the Stream Store](https://s2.dev/).
+`streamstore` is the Python package that provides an async client for interacting with [s2.dev](https://s2.dev/).
 
 ## Project links
 
