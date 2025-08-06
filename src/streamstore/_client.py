@@ -10,7 +10,7 @@ from typing import Self, cast
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from google.protobuf.field_mask_pb2 import FieldMask
-from grpc import StatusCode, ssl_channel_credentials, Compression
+from grpc import Compression, StatusCode, ssl_channel_credentials
 from grpc.aio import AioRpcError, Channel, secure_channel
 
 from streamstore import schemas
