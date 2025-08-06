@@ -8,7 +8,7 @@ from streamstore import S2
 from streamstore.schemas import Record
 from streamstore.utils import append_inputs_gen
 
-AUTH_TOKEN = os.getenv("S2_AUTH_TOKEN")
+ACCESS_TOKEN = os.getenv("S2_ACCESS_TOKEN")
 MY_BASIN = os.getenv("MY_BASIN")
 MY_STREAM = os.getenv("MY_STREAM")
 
@@ -23,7 +23,7 @@ async def records_gen() -> AsyncIterable[Record]:
 
 
 async def producer():
-    async with S2(auth_token=AUTH_TOKEN) as s2:
+    async with S2(access_token=ACCESS_TOKEN) as s2:
         stream = s2[MY_BASIN][MY_STREAM]
         async for output in stream.append_session(
             append_inputs_gen(
