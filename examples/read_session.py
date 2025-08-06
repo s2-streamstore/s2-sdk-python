@@ -3,13 +3,13 @@ import os
 
 from streamstore import S2
 
-AUTH_TOKEN = os.getenv("S2_AUTH_TOKEN")
+ACCESS_TOKEN = os.getenv("S2_ACCESS_TOKEN")
 MY_BASIN = os.getenv("MY_BASIN")
 MY_STREAM = os.getenv("MY_STREAM")
 
 
 async def consumer():
-    async with S2(auth_token=AUTH_TOKEN) as s2:
+    async with S2(access_token=ACCESS_TOKEN) as s2:
         stream = s2[MY_BASIN][MY_STREAM]
         start_seq_num = await stream.check_tail()
         print(f"reading from seq_num: {start_seq_num}")

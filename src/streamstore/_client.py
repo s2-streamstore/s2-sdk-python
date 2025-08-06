@@ -144,7 +144,7 @@ class S2:
     Async client for interacting with `s2.dev <https://s2.dev/>`_.
 
     Args:
-        auth_token: Authentication token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
+        access_token: Access token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
         endpoints: S2 endpoints. If None, public endpoints for S2 service running in AWS cloud will be used.
         request_timeout: Timeout for requests made by the client. Default value is 5 seconds.
         max_retries: Maximum number of retries for a request. Default value is 3.
@@ -166,7 +166,7 @@ class S2:
     @fallible
     def __init__(
         self,
-        auth_token: str,
+        access_token: str,
         endpoints: schemas.Endpoints | None = None,
         request_timeout: timedelta = timedelta(seconds=5.0),
         max_retries: int = 3,
@@ -188,7 +188,7 @@ class S2:
             enable_append_retries=enable_append_retries,
             rpc=_RpcConfig(
                 timeout=request_timeout.total_seconds(),
-                metadata=[("authorization", f"Bearer {auth_token}")],
+                metadata=[("authorization", f"Bearer {access_token}")],
                 compression=Compression.Gzip
                 if enable_compression
                 else Compression.NoCompression,
