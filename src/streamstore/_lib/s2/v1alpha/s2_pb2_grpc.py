@@ -67,6 +67,24 @@ class AccountServiceStub(object):
             response_deserializer=s2_dot_v1alpha_dot_s2__pb2.GetBasinConfigResponse.FromString,
             _registered_method=True,
         )
+        self.IssueAccessToken = channel.unary_unary(
+            "/s2.v1alpha.AccountService/IssueAccessToken",
+            request_serializer=s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenRequest.SerializeToString,
+            response_deserializer=s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenResponse.FromString,
+            _registered_method=True,
+        )
+        self.RevokeAccessToken = channel.unary_unary(
+            "/s2.v1alpha.AccountService/RevokeAccessToken",
+            request_serializer=s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenRequest.SerializeToString,
+            response_deserializer=s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenResponse.FromString,
+            _registered_method=True,
+        )
+        self.ListAccessTokens = channel.unary_unary(
+            "/s2.v1alpha.AccountService/ListAccessTokens",
+            request_serializer=s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensRequest.SerializeToString,
+            response_deserializer=s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensResponse.FromString,
+            _registered_method=True,
+        )
 
 
 class AccountServiceServicer(object):
@@ -106,6 +124,24 @@ class AccountServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def IssueAccessToken(self, request, context):
+        """Issue a new access token."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def RevokeAccessToken(self, request, context):
+        """Revoke an access token."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ListAccessTokens(self, request, context):
+        """List access tokens."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_AccountServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -133,6 +169,21 @@ def add_AccountServiceServicer_to_server(servicer, server):
             servicer.GetBasinConfig,
             request_deserializer=s2_dot_v1alpha_dot_s2__pb2.GetBasinConfigRequest.FromString,
             response_serializer=s2_dot_v1alpha_dot_s2__pb2.GetBasinConfigResponse.SerializeToString,
+        ),
+        "IssueAccessToken": grpc.unary_unary_rpc_method_handler(
+            servicer.IssueAccessToken,
+            request_deserializer=s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenRequest.FromString,
+            response_serializer=s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenResponse.SerializeToString,
+        ),
+        "RevokeAccessToken": grpc.unary_unary_rpc_method_handler(
+            servicer.RevokeAccessToken,
+            request_deserializer=s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenRequest.FromString,
+            response_serializer=s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenResponse.SerializeToString,
+        ),
+        "ListAccessTokens": grpc.unary_unary_rpc_method_handler(
+            servicer.ListAccessTokens,
+            request_deserializer=s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensRequest.FromString,
+            response_serializer=s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensResponse.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -287,6 +338,96 @@ class AccountService(object):
             "/s2.v1alpha.AccountService/GetBasinConfig",
             s2_dot_v1alpha_dot_s2__pb2.GetBasinConfigRequest.SerializeToString,
             s2_dot_v1alpha_dot_s2__pb2.GetBasinConfigResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def IssueAccessToken(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/s2.v1alpha.AccountService/IssueAccessToken",
+            s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenRequest.SerializeToString,
+            s2_dot_v1alpha_dot_s2__pb2.IssueAccessTokenResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def RevokeAccessToken(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/s2.v1alpha.AccountService/RevokeAccessToken",
+            s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenRequest.SerializeToString,
+            s2_dot_v1alpha_dot_s2__pb2.RevokeAccessTokenResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def ListAccessTokens(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/s2.v1alpha.AccountService/ListAccessTokens",
+            s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensRequest.SerializeToString,
+            s2_dot_v1alpha_dot_s2__pb2.ListAccessTokensResponse.FromString,
             options,
             channel_credentials,
             insecure,

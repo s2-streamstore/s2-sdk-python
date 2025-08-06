@@ -14,6 +14,13 @@ __all__ = [
     "StorageClass",
     "StreamConfig",
     "BasinConfig",
+    "ResourceMatchOp",
+    "ResourceMatchRule",
+    "Permission",
+    "OperationGroupPermissions",
+    "Operation",
+    "AccessTokenScope",
+    "AccessTokenInfo",
     "Cloud",
     "Endpoints",
 ]
@@ -215,9 +222,121 @@ class BasinConfig:
 
     #: Default configuration for streams in this basin.
     default_stream_config: StreamConfig
-
     #: Create stream on append if it doesn't exist, using the default stream configuration.
     create_stream_on_append: bool
+
+
+class ResourceMatchOp(DocEnum):
+    """
+    Resource match operator.
+    """
+
+    EXACT = (
+        1,
+        "Match only the resource with the exact value. Use an empty string to match no resources.",
+    )
+    PREFIX = (
+        2,
+        "Match all resources that start with the prefix value. Use an empty string to match all resources.",
+    )
+
+
+@dataclass(slots=True)
+class ResourceMatchRule:
+    """
+    Resource match rule.
+    """
+
+    #: Match operator.
+    match_op: ResourceMatchOp
+    #: Value to match.
+    value: str
+
+
+class Permission(DocEnum):
+    """
+    Permission.
+    """
+
+    UNSPECIFIED = 0
+    READ = 1
+    WRITE = 2
+    READ_WRITE = 3
+
+
+@dataclass(slots=True)
+class OperationGroupPermissions:
+    """
+    Operation group permissions.
+    """
+
+    #: Permission for account operations.
+    account: Permission = Permission.UNSPECIFIED
+    #: Permission for basin operations.
+    basin: Permission = Permission.UNSPECIFIED
+    #: Permission for stream operations.
+    stream: Permission = Permission.UNSPECIFIED
+
+
+class Operation(DocEnum):
+    """
+    Operation.
+    """
+
+    UNSPECIFIED = 0
+    LIST_BASINS = 1
+    CREATE_BASIN = 2
+    DELETE_BASIN = 3
+    RECONFIGURE_BASIN = 4
+    GET_BASIN_CONFIG = 5
+    ISSUE_ACCESS_TOKEN = 6
+    REVOKE_ACCESS_TOKEN = 7
+    LIST_ACCESS_TOKENS = 8
+    LIST_STREAMS = 9
+    CREATE_STREAM = 10
+    DELETE_STREAM = 11
+    GET_STREAM_CONFIG = 12
+    RECONFIGURE_STREAM = 13
+    CHECK_TAIL = 14
+    APPEND = 15
+    READ = 16
+
+
+@dataclass(slots=True)
+class AccessTokenScope:
+    """
+    Access token scope.
+    """
+
+    #: Allowed basins.
+    basins: ResourceMatchRule | None = None
+    #: Allowed streams.
+    streams: ResourceMatchRule | None = None
+    #: Allowed access token IDs.
+    access_tokens: ResourceMatchRule | None = None
+    #: Permissions at operation group level.
+    op_group_perms: OperationGroupPermissions | None = None
+    #: Allowed operations.
+    #:
+    #: Note:
+    #:  A union of allowed operations and groups is used as the effective set of allowed operations.
+    ops: list[Operation] | None = None
+
+
+@dataclass(slots=True)
+class AccessTokenInfo:
+    """
+    Access token information.
+    """
+
+    #: Access token ID.
+    id: str
+    #: Access token scope.
+    scope: AccessTokenScope
+    #: Expiration time in seconds since Unix epoch.
+    expires_at: int | None
+    #: Whether auto-prefixing is enabled for streams in scope.
+    auto_prefix_streams: bool
 
 
 class Cloud(DocEnum):

@@ -26,12 +26,15 @@ from streamstore._lib.s2.v1alpha.s2_pb2 import (
     DeleteStreamRequest,
     GetBasinConfigRequest,
     GetStreamConfigRequest,
+    IssueAccessTokenRequest,
+    ListAccessTokensRequest,
     ListBasinsRequest,
     ListStreamsRequest,
     ReadRequest,
     ReadSessionRequest,
     ReconfigureBasinRequest,
     ReconfigureStreamRequest,
+    RevokeAccessTokenRequest,
     StreamConfig,
 )
 from streamstore._lib.s2.v1alpha.s2_pb2_grpc import (
@@ -40,6 +43,8 @@ from streamstore._lib.s2.v1alpha.s2_pb2_grpc import (
     StreamServiceStub,
 )
 from streamstore._mappers import (
+    access_token_info_message,
+    access_token_info_schema,
     append_input_message,
     append_output_schema,
     basin_config_message,
@@ -412,6 +417,81 @@ class S2:
             metadata=self._config.rpc.metadata,
         )
         return basin_config_schema(response.config)
+
+    @fallible
+    async def issue_access_token(
+        self,
+        id: str,
+        scope: schemas.AccessTokenScope,
+        expires_at: int | None = None,
+        auto_prefix_streams: bool = False,
+    ) -> str:
+        """
+        Issue a new access token.
+
+        Args:
+            id: Access token ID.
+            scope: Access token scope.
+            expires_at: Expiration time in seconds since Unix epoch. If not specified, expiration
+                time of ``access_token`` passed to :class:`.S2` will be used.
+            auto_prefix_streams: Enable auto-prefixing: the specified prefix in
+              :attr:`.AccessTokenScope.streams` will be added to stream names in requests and stripped
+              from stream names in responses.
+
+        Note:
+            **id** must be unique to the account and between 1 and 96 bytes in length.
+        """
+        request = IssueAccessTokenRequest(
+            info=access_token_info_message(id, scope, auto_prefix_streams, expires_at)
+        )
+        response = await self._retrier(
+            self._stub.IssueAccessToken,
+            request,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
+        )
+        return response.token
+
+    @fallible
+    async def list_access_tokens(
+        self, prefix: str = "", start_after: str = "", limit: int = 1000
+    ) -> schemas.Page[schemas.AccessTokenInfo]:
+        """
+        List access tokens.
+
+        Args:
+            prefix: Filter to access tokens whose ID begins with this prefix.
+            start_after: Filter to access tokens whose ID lexicographically starts after this value.
+            limit: Number of results, up to a maximum of 1000.
+        """
+        request = ListAccessTokensRequest(prefix, start_after, limit)
+        response = await self._retrier(
+            self._stub.ListAccessTokens,
+            request,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
+        )
+        return schemas.Page(
+            items=[access_token_info_schema(info) for info in response.tokens],
+            has_more=response.has_more,
+        )
+
+    @fallible
+    async def revoke_access_token(self, id: str) -> schemas.AccessTokenInfo:
+        """
+        Revoke an access token.
+
+        Args:
+            id: Access token ID.
+        """
+        request = RevokeAccessTokenRequest(id)
+        response = await self._retrier(
+            self._stub.RevokeAccessToken,
+            request,
+            timeout=self._config.rpc.timeout,
+            metadata=self._config.rpc.metadata,
+        )
+        return access_token_info_schema(response.info)
 
 
 class Basin:
