@@ -22,8 +22,31 @@ docs = [
 ]
 
 [dependency-groups]
-dev = ["mypy>=1.14.1", "ruff>=0.9.1"]
+dev = ["mypy>=1.14.1", "poethepoet>=0.36.0", "ruff>=0.9.1"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.mypy]
+files = ["src/"]
+
+[tool.ruff]
+exclude = [
+    ".git",
+    ".github",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pycache__",
+    ".venv",
+    "dist",
+]
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.poe.tasks]
+linter = "uv run ruff check --fix"
+formatter = "uv run ruff format"
+type_checker = "uv run mypy"
+checker = ["linter", "formatter", "type_checker"]
