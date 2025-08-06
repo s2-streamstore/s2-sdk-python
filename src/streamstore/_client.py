@@ -141,13 +141,13 @@ class _Config:
 
 class S2:
     """
-    Async client for interacting with gRPC API of `S2 <https://s2.dev/>`_.
+    Async client for interacting with `s2.dev <https://s2.dev/>`_.
 
     Args:
         auth_token: Authentication token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
         endpoints: S2 endpoints. If None, public endpoints for S2 service running in AWS cloud will be used.
-        request_timeout: Timeout for gRPC requests made by the client. Default value is 5 seconds.
-        max_retries: Maximum number of retries for a gRPC request. Default value is 3.
+        request_timeout: Timeout for requests made by the client. Default value is 5 seconds.
+        max_retries: Maximum number of retries for a request. Default value is 3.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
             :meth:`.Stream.append_session`. Default value is True.
         enable_compression: Enable compression (Gzip) for :meth:`.Stream.append`, :meth:`.Stream.append_session`,
