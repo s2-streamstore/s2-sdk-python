@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import cast
 
-from google.protobuf.field_mask_pb2 import FieldMask
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 
 import streamstore._lib.s2.v1alpha.s2_pb2 as msgs
@@ -63,52 +63,60 @@ def stream_info_schema(info: msgs.StreamInfo) -> StreamInfo:
 
 
 def stream_config_message(
-    storage_class: StorageClass | None,
-    retention_age: timedelta | None = None,
-    return_mask: bool = False,
-) -> msgs.StreamConfig | tuple[msgs.StreamConfig, FieldMask]:
+    config: StreamConfig | None = None,
+    return_mask_paths: bool = False,
+    mask_path_prefix: str = "",
+) -> msgs.StreamConfig | tuple[msgs.StreamConfig, list[str]]:
     paths = []
     stream_config = msgs.StreamConfig()
-    if storage_class is not None:
-        paths.append("storage_class")
-        stream_config.storage_class = storage_class.value
-    if retention_age is not None:
-        paths.append("retention_policy")
-        stream_config.age = int(retention_age.total_seconds())
-    if return_mask:
-        return (stream_config, FieldMask(paths=paths))
+    if config:
+        storage_class = config.storage_class
+        retention_age = config.retention_age
+        if storage_class is not None:
+            paths.append(f"{mask_path_prefix}storage_class")
+            stream_config.storage_class = msgs.StorageClass(storage_class.value)
+        if retention_age is not None:
+            paths.append(f"{mask_path_prefix}retention_policy")
+            stream_config.age = retention_age
+    if return_mask_paths:
+        return (stream_config, paths)
     return stream_config
 
 
 def basin_config_message(
-    default_stream_storage_class: StorageClass | None,
-    default_stream_retention_age: timedelta | None = None,
-    create_stream_on_append: bool = False,
-    return_mask: bool = False,
-) -> msgs.BasinConfig | tuple[msgs.BasinConfig, FieldMask]:
+    config: BasinConfig | None = None,
+    return_mask_paths: bool = False,
+) -> msgs.BasinConfig | tuple[msgs.BasinConfig, list[str]]:
     paths = []
-    stream_config = msgs.StreamConfig()
-    if default_stream_storage_class is not None:
-        paths.append("default_stream_config.storage_class")
-        stream_config.storage_class = default_stream_storage_class.value
-    if default_stream_retention_age is not None:
-        paths.append("default_stream_config.retention_policy")
-        stream_config.age = int(default_stream_retention_age.total_seconds())
-    if create_stream_on_append is True:
-        paths.append("create_stream_on_append")
-    basin_config = msgs.BasinConfig(
-        default_stream_config=stream_config,
-        create_stream_on_append=create_stream_on_append,
-    )
-    if return_mask:
-        return (basin_config, FieldMask(paths=paths))
+    basin_config = msgs.BasinConfig()
+    if config:
+        if return_mask_paths:
+            default_stream_config, deep_paths = cast(
+                tuple[msgs.StreamConfig, list[str]],
+                stream_config_message(
+                    config.default_stream_config,
+                    return_mask_paths,
+                    mask_path_prefix="default_stream_config",
+                ),
+            )
+            paths.extend(deep_paths)
+        else:
+            default_stream_config = cast(
+                msgs.StreamConfig, stream_config_message(config.default_stream_config)
+            )
+        basin_config.default_stream_config = default_stream_config
+        if config.create_stream_on_append is not None:
+            basin_config.create_stream_on_append = config.create_stream_on_append
+            paths.append("create_stream_on_append")
+    if return_mask_paths:
+        return (basin_config, paths)
     return basin_config
 
 
 def stream_config_schema(config: msgs.StreamConfig) -> StreamConfig:
     return StreamConfig(
         StorageClass(config.storage_class),
-        timedelta(seconds=config.age),
+        config.age,
     )
 
 

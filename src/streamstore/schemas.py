@@ -27,7 +27,7 @@ __all__ = [
 
 import os
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import Generic, TypeVar
 
@@ -197,7 +197,6 @@ class StorageClass(DocEnum):
     Storage class for recent appends.
     """
 
-    UNSPECIFIED = 0, "``UNSPECIFIED`` defaults to ``EXPRESS``."
     STANDARD = 1, "Offers end-to-end latencies under 500 ms."
     EXPRESS = 2, "Offers end-to-end latencies under 50 ms."
 
@@ -205,25 +204,32 @@ class StorageClass(DocEnum):
 @dataclass(slots=True)
 class StreamConfig:
     """
-    Current configuration of a stream.
+    Stream configuration.
     """
 
     #: Storage class for this stream.
-    storage_class: StorageClass
-    #: Thresold for automatic trimming of records in this stream.
-    retention_age: timedelta
+    #:
+    #: If not specified, the default is :attr:`.StorageClass.EXPRESS`.
+    storage_class: StorageClass | None = None
+    #: Age in seconds for automatic trimming of records older than this threshold.
+    #:
+    #: If not specified, the default is to retain records for 7 days.
+    #:
+    #: If set to ``0``, the stream will have infinite retention.
+    #: (While S2 is in public preview, this is capped at 28 days. Let us know if you'd like the cap removed.)
+    retention_age: int | None = None
 
 
 @dataclass(slots=True)
 class BasinConfig:
     """
-    Current configuration of a basin.
+    Basin configuration.
     """
 
     #: Default configuration for streams in this basin.
-    default_stream_config: StreamConfig
+    default_stream_config: StreamConfig | None = None
     #: Create stream on append if it doesn't exist, using the default stream configuration.
-    create_stream_on_append: bool
+    create_stream_on_append: bool | None = None
 
 
 class ResourceMatchOp(DocEnum):
