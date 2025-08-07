@@ -2,10 +2,9 @@ import asyncio
 import re
 import uuid
 from collections import deque
-from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Self, cast
+from typing import AsyncIterable, Self, cast
 
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
@@ -240,19 +239,14 @@ class S2:
     async def create_basin(
         self,
         name: str,
-        default_stream_storage_class: schemas.StorageClass | None = None,
-        default_stream_retention_age: timedelta | None = None,
-        create_stream_on_append: bool = False,
+        config: schemas.BasinConfig | None = None,
     ) -> schemas.BasinInfo:
         """
         Create a basin.
 
         Args:
             name: Name of the basin.
-            default_stream_storage_class: Default storage class for streams of this basin.
-            default_stream_retention_age: Default threshold for automatic trimming of records in the
-                streams of this basin. If not specified, streams will have infinite retention.
-            create_stream_on_append: Create stream on append if it doesn't exist.
+            config: Configuration for the basin.
 
         Note:
             **name** must be globally unique and must be between 8 and 48 characters, comprising lowercase
@@ -263,11 +257,7 @@ class S2:
             basin=name,
             config=cast(
                 BasinConfig,
-                basin_config_message(
-                    default_stream_storage_class,
-                    default_stream_retention_age,
-                    create_stream_on_append,
-                ),
+                basin_config_message(config),
             ),
         )
         metadata = self._config.rpc.metadata + [
@@ -382,34 +372,29 @@ class S2:
     async def reconfigure_basin(
         self,
         name: str,
-        default_stream_storage_class: schemas.StorageClass | None = None,
-        default_stream_retention_age: timedelta | None = None,
-        create_stream_on_append: bool = False,
+        config: schemas.BasinConfig,
     ) -> schemas.BasinConfig:
         """
         Modify the configuration of a basin.
 
         Args:
             name: Name of the basin.
-            default_stream_storage_class: Default storage class for streams of this basin.
-            default_stream_retention_age: Default threshold for automatic trimming of records in the
-                streams of this basin. If not specified, streams will have infinite retention.
-            create_stream_on_append: Create stream on append if it doesn't exist.
+            config: Configuration for the basin.
 
         Note:
-            Modifiying the default stream-related configuration doesn't affect already existing streams;
-            it only applies to new streams created hereafter.
+            Modifiying the :attr:`.BasinConfig.default_stream_config` doesn't affect already
+            existing streams; it only applies to new streams created hereafter.
         """
-        basin_config, mask = cast(
-            tuple[BasinConfig, FieldMask],
+        basin_config, mask_paths = cast(
+            tuple[BasinConfig, list[str]],
             basin_config_message(
-                default_stream_storage_class,
-                default_stream_retention_age,
-                create_stream_on_append,
-                return_mask=True,
+                config,
+                return_mask_paths=True,
             ),
         )
-        request = ReconfigureBasinRequest(basin=name, config=basin_config, mask=mask)
+        request = ReconfigureBasinRequest(
+            basin=name, config=basin_config, mask=FieldMask(paths=mask_paths)
+        )
         response = await self._retrier(
             self._stub.ReconfigureBasin,
             request,
@@ -539,17 +524,14 @@ class Basin:
     async def create_stream(
         self,
         name: str,
-        storage_class: schemas.StorageClass | None = None,
-        retention_age: timedelta | None = None,
+        config: schemas.StreamConfig | None = None,
     ) -> schemas.StreamInfo:
         """
         Create a stream.
 
         Args:
             name: Name of the stream.
-            storage_class: Storage class for this stream.
-            retention_age: Thresold for automatic trimming of records in this stream. If not specified,
-                the stream will have infinite retention.
+            config: Configuration for the stream.
 
         Note:
             **name** must be unique within the basin. It can be an arbitrary string upto 512 characters.
@@ -558,7 +540,8 @@ class Basin:
         request = CreateStreamRequest(
             stream=name,
             config=cast(
-                StreamConfig, stream_config_message(storage_class, retention_age)
+                StreamConfig,
+                stream_config_message(config),
             ),
         )
         metadata = self._config.rpc.metadata + [
@@ -670,27 +653,26 @@ class Basin:
     async def reconfigure_stream(
         self,
         name: str,
-        storage_class: schemas.StorageClass | None = None,
-        retention_age: timedelta | None = None,
+        config: schemas.StreamConfig,
     ) -> schemas.StreamConfig:
         """
         Modify the configuration of a stream.
 
         Args:
             name: Name of the stream.
-            storage_class: Storage class for this stream.
-            retention_age: Thresold for automatic trimming of records in this stream. If not specified,
-                the stream will have infinite retention.
+            config: Configuration for the stream.
 
         Note:
-            Modifying **storage_class** will take effect only when this stream has been inactive for 10 minutes.
-            This will become a live migration in future.
+            Modifying :attr:`.StreamConfig.storage_class` will take effect only when this stream has
+            been inactive for 10 minutes. This will become a live migration in future.
         """
-        stream_config, mask = cast(
-            tuple[StreamConfig, FieldMask],
-            stream_config_message(storage_class, retention_age, return_mask=True),
+        stream_config, mask_paths = cast(
+            tuple[StreamConfig, list[str]],
+            stream_config_message(config, return_mask_paths=True),
         )
-        request = ReconfigureStreamRequest(stream=name, config=stream_config, mask=mask)
+        request = ReconfigureStreamRequest(
+            stream=name, config=stream_config, mask=FieldMask(paths=mask_paths)
+        )
         response = await self._retrier(
             self._stub.ReconfigureStream,
             request,
