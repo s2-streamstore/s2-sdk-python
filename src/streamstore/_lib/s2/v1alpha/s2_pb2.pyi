@@ -446,13 +446,13 @@ class AppendInput(_message.Message):
     stream: str
     records: _containers.RepeatedCompositeFieldContainer[AppendRecord]
     match_seq_num: int
-    fencing_token: bytes
+    fencing_token: str
     def __init__(
         self,
         stream: _Optional[str] = ...,
         records: _Optional[_Iterable[_Union[AppendRecord, _Mapping]]] = ...,
         match_seq_num: _Optional[int] = ...,
-        fencing_token: _Optional[bytes] = ...,
+        fencing_token: _Optional[str] = ...,
     ) -> None: ...
 
 class AppendOutput(_message.Message):

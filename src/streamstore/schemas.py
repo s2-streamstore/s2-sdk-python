@@ -80,7 +80,7 @@ class AppendInput:
     #: Enforce that the sequence number issued to the first record in the batch matches this value.
     match_seq_num: int | None = None
     #: Enforce a fencing token, which must have been previously set by a ``fence`` command record.
-    fencing_token: bytes | None = None
+    fencing_token: str | None = None
 
 
 @dataclass(slots=True)
