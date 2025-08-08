@@ -2,6 +2,9 @@ __all__ = [
     "Record",
     "AppendInput",
     "AppendOutput",
+    "SeqNum",
+    "Timestamp",
+    "TailOffset",
     "ReadLimit",
     "SequencedRecord",
     "FirstSeqNum",
@@ -12,6 +15,8 @@ __all__ = [
     "BasinInfo",
     "StreamInfo",
     "StorageClass",
+    "TimestampingMode",
+    "Timestamping",
     "StreamConfig",
     "BasinConfig",
     "ResourceMatchOp",
@@ -57,6 +62,10 @@ class Record:
     body: bytes
     #: Series of name-value pairs for this record.
     headers: list[tuple[bytes, bytes]] = field(default_factory=list)
+    #: Timestamp for this record.
+    #:
+    #: Precise semantics depend on :attr:`.StreamConfig.timestamping`.
+    timestamp: int | None = None
 
 
 @dataclass(slots=True)
@@ -84,14 +93,20 @@ class AppendOutput:
     Yielded from :meth:`.Stream.append_session`.
     """
 
-    #: Sequence number of first record appended.
+    #: Sequence number of the first appended record.
     start_seq_num: int
-    #: Sequence number of last record appended + 1.
+    #: Timestamp of the first appended record.
+    start_timestamp: int
+    #: Sequence number of the last appended record + 1.
     #: ``end_seq_num - start_seq_num`` will be the number of records in the batch.
     end_seq_num: int
-    #: Sequence number of last durable record on the stream + 1.
+    #: Timestamp of the last appended record.
+    end_timestamp: int
+    #: Sequence number of the last durable record on the stream + 1.
     #: This can be greater than ``end_seq_num`` in case of concurrent appends.
     next_seq_num: int
+    #: Timestamp of the last durable record on the stream.
+    last_timestamp: int
 
 
 @dataclass(slots=True)
@@ -114,12 +129,33 @@ class SequencedRecord:
     Record read from a stream.
     """
 
-    #: Sequence number for this record.
+    #: Sequence number assigned to this record.
     seq_num: int
     #: Body of this record.
     body: bytes
     #: Series of name-value pairs for this record.
     headers: list[tuple[bytes, bytes]]
+    #: Timestamp for this record.
+    timestamp: int
+
+
+@dataclass(slots=True)
+class SeqNum:
+    value: int
+
+
+@dataclass(slots=True)
+class Timestamp:
+    value: int
+
+
+@dataclass(slots=True)
+class TailOffset:
+    """
+    Number of records before the tail.
+    """
+
+    value: int
 
 
 @dataclass(slots=True)
@@ -201,6 +237,39 @@ class StorageClass(DocEnum):
     EXPRESS = 2, "Offers end-to-end latencies under 50 ms."
 
 
+class TimestampingMode(DocEnum):
+    """
+    Timestamping mode.
+
+    Note:
+        The arrival time is always in milliseconds since Unix epoch.
+    """
+
+    CLIENT_PREFER = (
+        1,
+        "Prefer client-specified timestamp if present, otherwise use arrival time.",
+    )
+    CLIENT_REQUIRE = (
+        2,
+        "Require a client-specified timestamp and reject the append if it is absent.",
+    )
+    ARRIVAL = 3, "Use the arrival time and ignore any client-specified timestamp."
+
+
+@dataclass(slots=True)
+class Timestamping:
+    """
+    Timestamping behavior.
+    """
+
+    #: Timestamping mode.
+    #:
+    #: If not specified, the default is  :attr:`.TimestampingMode.CLIENT_PREFER`.
+    mode: TimestampingMode | None = None
+    #: Allow client-specified timestamps to exceed the arrival time.
+    uncapped: bool | None = None
+
+
 @dataclass(slots=True)
 class StreamConfig:
     """
@@ -218,6 +287,8 @@ class StreamConfig:
     #: If set to ``0``, the stream will have infinite retention.
     #: (While S2 is in public preview, this is capped at 28 days. Let us know if you'd like the cap removed.)
     retention_age: int | None = None
+    #: Timestamping behavior for appends to this stream, which influences how timestamps are handled.
+    timestamping: Timestamping | None = None
 
 
 @dataclass(slots=True)

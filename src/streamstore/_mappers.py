@@ -20,11 +20,16 @@ from streamstore.schemas import (
     Record,
     ResourceMatchOp,
     ResourceMatchRule,
+    SeqNum,
     SequencedRecord,
     StorageClass,
     StreamConfig,
     StreamInfo,
+    TailOffset,
+    Timestamp,
 )
+
+_ReadStart = SeqNum | Timestamp | TailOffset
 
 
 def append_record_message(record: Record) -> msgs.AppendRecord:
@@ -42,11 +47,40 @@ def append_input_message(stream: str, input: AppendInput) -> msgs.AppendInput:
     )
 
 
-def read_limit_message(limit: ReadLimit | None) -> msgs.ReadLimit:
+def read_request_message(
+    stream: str, start: _ReadStart, limit: ReadLimit | None
+) -> msgs.ReadRequest:
+    seq_num, timestamp, tail_offset = _read_start_pos(start)
+    return msgs.ReadRequest(
+        stream, seq_num, timestamp, tail_offset, _read_limit_message(limit)
+    )
+
+
+def read_session_request_message(
+    stream: str, start: _ReadStart, limit: ReadLimit | None
+) -> msgs.ReadSessionRequest:
+    seq_num, timestamp, tail_offset = _read_start_pos(start)
+    return msgs.ReadSessionRequest(
+        stream, seq_num, timestamp, tail_offset, _read_limit_message(limit)
+    )
+
+
+def _read_start_pos(start: _ReadStart) -> tuple[int | None, int | None, int | None]:
+    seq_num = None
+    timestamp = None
+    tail_offset = None
+    if isinstance(start, SeqNum):
+        seq_num = start.value
+    elif isinstance(start, Timestamp):
+        timestamp = start.value
+    elif isinstance(start, TailOffset):
+        tail_offset = start.value
+    else:
+        raise ValueError("start doesn't match any of the expected types")
     return (
-        msgs.ReadLimit(count=limit.count, bytes=limit.bytes)
-        if limit
-        else msgs.ReadLimit()
+        seq_num,
+        timestamp,
+        tail_offset,
     )
 
 
@@ -72,12 +106,24 @@ def stream_config_message(
     if config:
         storage_class = config.storage_class
         retention_age = config.retention_age
+        timestamping = config.timestamping
         if storage_class is not None:
             paths.append(f"{mask_path_prefix}storage_class")
             stream_config.storage_class = msgs.StorageClass(storage_class.value)
         if retention_age is not None:
             paths.append(f"{mask_path_prefix}retention_policy")
             stream_config.age = retention_age
+        if timestamping is not None:
+            paths.append(f"{mask_path_prefix}timestamping")
+            stream_config.timestamping = msgs.StreamConfig.Timestamping()
+            if timestamping.mode is not None:
+                paths.append(f"{mask_path_prefix}timestamping.mode")
+                stream_config.timestamping.mode = msgs.TimestampingMode(
+                    timestamping.mode.value
+                )
+            if timestamping.uncapped is not None:
+                paths.append(f"{mask_path_prefix}timestamping.uncapped")
+                stream_config.timestamping.uncapped = timestamping.uncapped
     if return_mask_paths:
         return (stream_config, paths)
     return stream_config
@@ -96,7 +142,7 @@ def basin_config_message(
                 stream_config_message(
                     config.default_stream_config,
                     return_mask_paths,
-                    mask_path_prefix="default_stream_config",
+                    mask_path_prefix="default_stream_config.",
                 ),
             )
             paths.extend(deep_paths)
@@ -128,7 +174,14 @@ def basin_config_schema(config: msgs.BasinConfig) -> BasinConfig:
 
 
 def append_output_schema(output: msgs.AppendOutput) -> AppendOutput:
-    return AppendOutput(output.start_seq_num, output.end_seq_num, output.next_seq_num)
+    return AppendOutput(
+        output.start_seq_num,
+        output.start_timestamp,
+        output.end_seq_num,
+        output.end_timestamp,
+        output.next_seq_num,
+        output.last_timestamp,
+    )
 
 
 def sequenced_records_schema(
@@ -137,13 +190,18 @@ def sequenced_records_schema(
     if ignore_command_records:
         return [
             SequencedRecord(
-                sr.seq_num, sr.body, [(h.name, h.value) for h in sr.headers]
+                sr.seq_num,
+                sr.body,
+                [(h.name, h.value) for h in sr.headers],
+                sr.timestamp,
             )
             for sr in batch.records
             if _not_a_command_record(sr.headers)
         ]
     return [
-        SequencedRecord(sr.seq_num, sr.body, [(h.name, h.value) for h in sr.headers])
+        SequencedRecord(
+            sr.seq_num, sr.body, [(h.name, h.value) for h in sr.headers], sr.timestamp
+        )
         for sr in batch.records
     ]
 
@@ -197,7 +255,7 @@ def access_token_info_message(
         scope=msgs.AccessTokenScope(
             basins=resource_set(scope.basins),
             streams=resource_set(scope.streams),
-            tokens=resource_set(scope.access_tokens),
+            access_tokens=resource_set(scope.access_tokens),
             op_groups=permitted_op_groups(scope.op_group_perms),
             ops=(msgs.Operation(op.value) for op in scope.ops) if scope.ops else None,
         ),
@@ -231,7 +289,7 @@ def access_token_info_schema(info: msgs.AccessTokenInfo) -> AccessTokenInfo:
         scope=AccessTokenScope(
             basins=resource_match_rule(info.scope.basins),
             streams=resource_match_rule(info.scope.streams),
-            access_tokens=resource_match_rule(info.scope.tokens),
+            access_tokens=resource_match_rule(info.scope.access_tokens),
             op_group_perms=OperationGroupPermissions(
                 account=permission(info.scope.op_groups.account),
                 basin=permission(info.scope.op_groups.basin),
@@ -241,6 +299,14 @@ def access_token_info_schema(info: msgs.AccessTokenInfo) -> AccessTokenInfo:
         ),
         auto_prefix_streams=info.auto_prefix_streams,
         expires_at=info.expires_at if info.HasField("expires_at") else None,
+    )
+
+
+def _read_limit_message(limit: ReadLimit | None) -> msgs.ReadLimit:
+    return (
+        msgs.ReadLimit(count=limit.count, bytes=limit.bytes)
+        if limit
+        else msgs.ReadLimit()
     )
 
 

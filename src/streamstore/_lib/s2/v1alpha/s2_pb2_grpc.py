@@ -756,7 +756,7 @@ class StreamServiceServicer(object):
     """Operate on an S2 stream."""
 
     def CheckTail(self, request, context):
-        """Check the sequence number that will be assigned to the next record on a stream."""
+        """Check the tail of the stream."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
