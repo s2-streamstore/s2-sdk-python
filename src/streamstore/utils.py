@@ -17,16 +17,18 @@ class CommandRecord:
     TRIM = b"trim"
 
     @staticmethod
-    def fence(token: bytes) -> Record:
+    def fence(token: str) -> Record:
         """
         Create a fence command record.
 
         Args:
-            token: `Fencing token <https://s2.dev/docs/stream#fencing-token>`_. Cannot exceed 16 bytes. If empty, clears the previously set token.
+            token: Fencing token. Its UTF-8 byte count must not exceed 36 bytes. If empty, clears
+                the previously set token.
         """
-        if len(token) > 16:
-            raise ValueError("fencing token cannot be greater than 16 bytes")
-        return Record(body=token, headers=[(bytes(), CommandRecord.FENCE)])
+        encoded_token = token.encode()
+        if len(encoded_token) > 36:
+            raise ValueError("UTF-8 byte count of fencing token exceeds 36 bytes")
+        return Record(body=encoded_token, headers=[(bytes(), CommandRecord.FENCE)])
 
     @staticmethod
     def trim(desired_first_seq_num: int) -> Record:
@@ -81,7 +83,7 @@ class _AutoBatcher:
 
     append_input_queue: Queue[AppendInput | None]
     match_seq_num: int | None
-    fencing_token: bytes | None
+    fencing_token: str | None
     max_records_per_batch: int
     max_bytes_per_batch: int
     max_linger_per_batch: timedelta | None
@@ -185,7 +187,7 @@ class _AppendInputAsyncIterator:
 async def append_inputs_gen(
     records: AsyncIterable[Record],
     match_seq_num: int | None = None,
-    fencing_token: bytes | None = None,
+    fencing_token: str | None = None,
     max_records_per_batch: int = 1000,
     max_bytes_per_batch: int = ONE_MIB,
     max_linger_per_batch: timedelta | None = None,
