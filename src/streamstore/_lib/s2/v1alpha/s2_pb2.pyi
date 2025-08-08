@@ -38,6 +38,9 @@ class Operation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     OPERATION_READ: _ClassVar[Operation]
     OPERATION_TRIM: _ClassVar[Operation]
     OPERATION_FENCE: _ClassVar[Operation]
+    OPERATION_ACCOUNT_METRICS: _ClassVar[Operation]
+    OPERATION_BASIN_METRICS: _ClassVar[Operation]
+    OPERATION_STREAM_METRICS: _ClassVar[Operation]
 
 class StorageClass(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -80,6 +83,9 @@ OPERATION_APPEND: Operation
 OPERATION_READ: Operation
 OPERATION_TRIM: Operation
 OPERATION_FENCE: Operation
+OPERATION_ACCOUNT_METRICS: Operation
+OPERATION_BASIN_METRICS: Operation
+OPERATION_STREAM_METRICS: Operation
 STORAGE_CLASS_UNSPECIFIED: StorageClass
 STORAGE_CLASS_STANDARD: StorageClass
 STORAGE_CLASS_EXPRESS: StorageClass
@@ -531,17 +537,29 @@ class ReadOutput(_message.Message):
     ) -> None: ...
 
 class ReadRequest(_message.Message):
-    __slots__ = ("stream", "seq_num", "timestamp", "tail_offset", "limit")
+    __slots__ = (
+        "stream",
+        "seq_num",
+        "timestamp",
+        "tail_offset",
+        "limit",
+        "until",
+        "clamp",
+    )
     STREAM_FIELD_NUMBER: _ClassVar[int]
     SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     TAIL_OFFSET_FIELD_NUMBER: _ClassVar[int]
     LIMIT_FIELD_NUMBER: _ClassVar[int]
+    UNTIL_FIELD_NUMBER: _ClassVar[int]
+    CLAMP_FIELD_NUMBER: _ClassVar[int]
     stream: str
     seq_num: int
     timestamp: int
     tail_offset: int
     limit: ReadLimit
+    until: int
+    clamp: bool
     def __init__(
         self,
         stream: _Optional[str] = ...,
@@ -549,6 +567,8 @@ class ReadRequest(_message.Message):
         timestamp: _Optional[int] = ...,
         tail_offset: _Optional[int] = ...,
         limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
+        until: _Optional[int] = ...,
+        clamp: bool = ...,
     ) -> None: ...
 
 class ReadResponse(_message.Message):
@@ -570,19 +590,32 @@ class ReadLimit(_message.Message):
     ) -> None: ...
 
 class ReadSessionRequest(_message.Message):
-    __slots__ = ("stream", "seq_num", "timestamp", "tail_offset", "limit", "heartbeats")
+    __slots__ = (
+        "stream",
+        "seq_num",
+        "timestamp",
+        "tail_offset",
+        "limit",
+        "heartbeats",
+        "until",
+        "clamp",
+    )
     STREAM_FIELD_NUMBER: _ClassVar[int]
     SEQ_NUM_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
     TAIL_OFFSET_FIELD_NUMBER: _ClassVar[int]
     LIMIT_FIELD_NUMBER: _ClassVar[int]
     HEARTBEATS_FIELD_NUMBER: _ClassVar[int]
+    UNTIL_FIELD_NUMBER: _ClassVar[int]
+    CLAMP_FIELD_NUMBER: _ClassVar[int]
     stream: str
     seq_num: int
     timestamp: int
     tail_offset: int
     limit: ReadLimit
     heartbeats: bool
+    until: int
+    clamp: bool
     def __init__(
         self,
         stream: _Optional[str] = ...,
@@ -591,6 +624,8 @@ class ReadSessionRequest(_message.Message):
         tail_offset: _Optional[int] = ...,
         limit: _Optional[_Union[ReadLimit, _Mapping]] = ...,
         heartbeats: bool = ...,
+        until: _Optional[int] = ...,
+        clamp: bool = ...,
     ) -> None: ...
 
 class ReadSessionResponse(_message.Message):

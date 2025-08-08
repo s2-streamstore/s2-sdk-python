@@ -48,7 +48,10 @@ def append_input_message(stream: str, input: AppendInput) -> msgs.AppendInput:
 
 
 def read_request_message(
-    stream: str, start: _ReadStart, limit: ReadLimit | None
+    stream: str,
+    start: _ReadStart,
+    limit: ReadLimit | None,
+    until: int | None,
 ) -> msgs.ReadRequest:
     seq_num, timestamp, tail_offset = _read_start_pos(start)
     return msgs.ReadRequest(
@@ -57,11 +60,16 @@ def read_request_message(
         timestamp=timestamp,
         tail_offset=tail_offset,
         limit=_read_limit_message(limit),
+        until=until,
     )
 
 
 def read_session_request_message(
-    stream: str, start: _ReadStart, limit: ReadLimit | None
+    stream: str,
+    start: _ReadStart,
+    limit: ReadLimit | None,
+    until: int | None,
+    clamp: bool = False,
 ) -> msgs.ReadSessionRequest:
     seq_num, timestamp, tail_offset = _read_start_pos(start)
     return msgs.ReadSessionRequest(
@@ -70,6 +78,8 @@ def read_session_request_message(
         timestamp=timestamp,
         tail_offset=tail_offset,
         limit=_read_limit_message(limit),
+        until=until,
+        clamp=clamp,
     )
 
 
