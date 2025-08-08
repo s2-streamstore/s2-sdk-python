@@ -2,6 +2,7 @@ __all__ = [
     "Record",
     "AppendInput",
     "AppendOutput",
+    "Tail",
     "SeqNum",
     "Timestamp",
     "TailOffset",
@@ -104,6 +105,18 @@ class AppendOutput:
     end_timestamp: int
     #: Sequence number of the last durable record on the stream + 1.
     #: This can be greater than ``end_seq_num`` in case of concurrent appends.
+    next_seq_num: int
+    #: Timestamp of the last durable record on the stream.
+    last_timestamp: int
+
+
+@dataclass(slots=True)
+class Tail:
+    """
+    Tail of a stream.
+    """
+
+    #: Sequence number of the last durable record on the stream + 1.
     next_seq_num: int
     #: Timestamp of the last durable record on the stream.
     last_timestamp: int

@@ -713,10 +713,9 @@ class Stream:
         return self._name
 
     @fallible
-    async def check_tail(self) -> int:
+    async def check_tail(self) -> schemas.Tail:
         """
-        Returns:
-            Sequence number that will be assigned to the next record on a stream.
+        Check the tail of a stream.
         """
         request = CheckTailRequest(stream=self.name)
         response = await self._retrier(
@@ -725,7 +724,7 @@ class Stream:
             timeout=self._config.rpc.timeout,
             metadata=self._config.rpc.metadata,
         )
-        return response.next_seq_num
+        return schemas.Tail(response.next_seq_num, response.last_timestamp)
 
     @fallible
     async def append(self, input: schemas.AppendInput) -> schemas.AppendOutput:
@@ -887,7 +886,7 @@ class Stream:
         start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
         ignore_command_records: bool = False,
-    ) -> list[schemas.SequencedRecord] | schemas.FirstSeqNum | schemas.NextSeqNum:
+    ) -> list[schemas.SequencedRecord] | schemas.Tail:
         """
         Read a batch of records from a stream.
 
@@ -897,18 +896,12 @@ class Stream:
             ignore_command_records: Filters out command records if present from the batch.
 
         Returns:
-            Batch of sequenced records. It can be empty only if **limit** was provided,
+            Batch of sequenced records. It can be empty only if ``limit`` was provided,
             and the first record that could have been returned violated the limit.
 
             (or)
 
-            Sequence number for the first record on this stream, if the provided
-            **start_seq_num** was smaller.
-
-            (or)
-
-            Sequence number for the next record on this stream, if the provided
-            **start_seq_num** was larger.
+            Tail of the stream. It will be returned only if ``start`` equals or exceeds the tail of the stream.
         """
         request = read_request_message(self.name, start, limit)
         response = await self._retrier(
@@ -922,10 +915,9 @@ class Stream:
         match output.WhichOneof("output"):
             case "batch":
                 return sequenced_records_schema(output.batch, ignore_command_records)
-            case "first_seq_num":
-                return schemas.FirstSeqNum(output.first_seq_num)
             case "next_seq_num":
-                return schemas.NextSeqNum(output.next_seq_num)
+                # TODO: use correct last_timestamp when migrating to v1 API.
+                return schemas.Tail(output.next_seq_num, 0)
             case _:
                 raise RuntimeError(
                     "Read output doesn't match any of the expected values"
@@ -937,9 +929,7 @@ class Stream:
         start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
         ignore_command_records: bool = False,
-    ) -> AsyncIterable[
-        list[schemas.SequencedRecord] | schemas.FirstSeqNum | schemas.NextSeqNum
-    ]:
+    ) -> AsyncIterable[list[schemas.SequencedRecord] | schemas.Tail]:
         """
         Read batches of records from a stream continuously.
 
@@ -949,31 +939,20 @@ class Stream:
             ignore_command_records: Filters out command records if present from the batch.
 
         Note:
-            With a session, you are able to read in a streaming fashion. If a **limit** was not provided
-            and the end of the stream is reached, the session goes into real-time tailing mode and
+            With a session, you are able to read in a streaming fashion. If a ``limit`` was not provided
+            and the tail of the stream is reached, the session goes into real-time tailing mode and
             will yield records as they are appended to the stream.
 
         Yields:
-            Batch of sequenced records. It can be empty only if **limit** was provided,
-            and the first record that could have been returned violated the limit.
+            Batch of sequenced records.
 
             (or)
 
-            Sequence number for the first record on this stream, if the provided
-            **start_seq_num** was smaller.
-
-            (or)
-
-            Sequence number for the next record on this stream, if the provided
-            **start_seq_num** was larger.
+            Tail of the stream. It will be yielded only if ``limit`` was provided, and the tail of
+            the stream is reached before meeting it.
 
         Returns:
-            If **limit** was provided, and if it was met or the end of the stream was reached
-            before meeting it.
-
-            (or)
-
-            If previous yield was not a batch of sequenced records.
+            If the previous yield was the tail of the stream.
         """
         request = read_session_request_message(self.name, start, limit)
         max_attempts = self._config.max_retries
@@ -996,11 +975,9 @@ class Stream:
                             )
                             _prepare_read_session_request_for_retry(request, records)
                             yield records
-                        case "first_seq_num":
-                            yield schemas.FirstSeqNum(output.first_seq_num)
-                            return
                         case "next_seq_num":
-                            yield schemas.NextSeqNum(output.next_seq_num)
+                            # TODO: use correct last_timestamp when migrating to v1 API.
+                            yield schemas.Tail(output.next_seq_num, 0)
                             return
                         case _:
                             raise RuntimeError(

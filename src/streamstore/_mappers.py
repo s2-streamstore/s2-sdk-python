@@ -52,7 +52,11 @@ def read_request_message(
 ) -> msgs.ReadRequest:
     seq_num, timestamp, tail_offset = _read_start_pos(start)
     return msgs.ReadRequest(
-        stream, seq_num, timestamp, tail_offset, _read_limit_message(limit)
+        stream=stream,
+        seq_num=seq_num,
+        timestamp=timestamp,
+        tail_offset=tail_offset,
+        limit=_read_limit_message(limit),
     )
 
 
@@ -61,7 +65,11 @@ def read_session_request_message(
 ) -> msgs.ReadSessionRequest:
     seq_num, timestamp, tail_offset = _read_start_pos(start)
     return msgs.ReadSessionRequest(
-        stream, seq_num, timestamp, tail_offset, _read_limit_message(limit)
+        stream=stream,
+        seq_num=seq_num,
+        timestamp=timestamp,
+        tail_offset=tail_offset,
+        limit=_read_limit_message(limit),
     )
 
 
