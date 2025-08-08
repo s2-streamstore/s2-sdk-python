@@ -29,7 +29,6 @@ from streamstore._lib.s2.v1alpha.s2_pb2 import (
     ListAccessTokensRequest,
     ListBasinsRequest,
     ListStreamsRequest,
-    ReadRequest,
     ReadSessionRequest,
     ReconfigureBasinRequest,
     ReconfigureStreamRequest,
@@ -49,7 +48,8 @@ from streamstore._mappers import (
     basin_config_message,
     basin_config_schema,
     basin_info_schema,
-    read_limit_message,
+    read_request_message,
+    read_session_request_message,
     sequenced_records_schema,
     stream_config_message,
     stream_config_schema,
@@ -119,7 +119,7 @@ def _prepare_read_session_request_for_retry(
     request: ReadSessionRequest, last_read_batch: list[schemas.SequencedRecord]
 ) -> None:
     if len(last_read_batch) > 0:
-        request.start_seq_num = last_read_batch[-1].seq_num + 1
+        request.seq_num = last_read_batch[-1].seq_num + 1
         if request.limit.count is not None and request.limit.count != 0:
             request.limit.count = max(request.limit.count - len(last_read_batch), 0)
         if request.limit.bytes is not None and request.limit.bytes != 0:
@@ -884,7 +884,7 @@ class Stream:
     @fallible
     async def read(
         self,
-        start_seq_num: int,
+        start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
         ignore_command_records: bool = False,
     ) -> list[schemas.SequencedRecord] | schemas.FirstSeqNum | schemas.NextSeqNum:
@@ -892,7 +892,7 @@ class Stream:
         Read a batch of records from a stream.
 
         Args:
-            start_seq_num: Starting sequence number (inclusive).
+            start: Starting position (inclusive).
             limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
             ignore_command_records: Filters out command records if present from the batch.
 
@@ -910,11 +910,7 @@ class Stream:
             Sequence number for the next record on this stream, if the provided
             **start_seq_num** was larger.
         """
-        request = ReadRequest(
-            stream=self.name,
-            start_seq_num=start_seq_num,
-            limit=read_limit_message(limit),
-        )
+        request = read_request_message(self.name, start, limit)
         response = await self._retrier(
             self._stub.Read,
             request,
@@ -938,7 +934,7 @@ class Stream:
     @fallible
     async def read_session(
         self,
-        start_seq_num: int,
+        start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
         ignore_command_records: bool = False,
     ) -> AsyncIterable[
@@ -948,7 +944,7 @@ class Stream:
         Read batches of records from a stream continuously.
 
         Args:
-            start_seq_num: Starting sequence number (inclusive).
+            start: Starting position (inclusive).
             limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
             ignore_command_records: Filters out command records if present from the batch.
 
@@ -979,11 +975,7 @@ class Stream:
 
             If previous yield was not a batch of sequenced records.
         """
-        request = ReadSessionRequest(
-            stream=self.name,
-            start_seq_num=start_seq_num,
-            limit=read_limit_message(limit),
-        )
+        request = read_session_request_message(self.name, start, limit)
         max_attempts = self._config.max_retries
         backoffs = compute_backoffs(max_attempts)
         attempt = 0
