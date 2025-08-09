@@ -302,6 +302,10 @@ class StreamConfig:
     retention_age: int | None = None
     #: Timestamping behavior for appends to this stream, which influences how timestamps are handled.
     timestamping: Timestamping | None = None
+    #: Minimum age in seconds before this stream can be automatically deleted if empty.
+    #:
+    #: If not specified or set to ``0``, this stream will not be automatically deleted.
+    delete_on_empty_min_age: int | None = None
 
 
 @dataclass(slots=True)
