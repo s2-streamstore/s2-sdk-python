@@ -1021,7 +1021,12 @@ dependencies = [
     { name = "types-protobuf" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "poethepoet" },
+    { name = "ruff" },
+]
 docs = [
     { name = "enum-tools", extra = ["sphinx"] },
     { name = "furo" },
@@ -1030,33 +1035,27 @@ docs = [
     { name = "sphinx-autodoc-typehints" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "poethepoet" },
-    { name = "ruff" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.8.0" },
-    { name = "enum-tools", extras = ["sphinx"], marker = "extra == 'docs'", specifier = ">=0.12.0" },
-    { name = "furo", marker = "extra == 'docs'", specifier = ">=2024.8.6" },
     { name = "grpc-stubs", specifier = ">=1.53.0.5" },
     { name = "grpcio", specifier = ">=1.69.0" },
     { name = "grpcio-tools", specifier = ">=1.69.0" },
-    { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=4.0.0" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = "==8.1.3" },
-    { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'", specifier = ">=3.0.0" },
     { name = "types-protobuf", specifier = ">=5.29.1.20241207" },
 ]
-provides-extras = ["docs"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.14.1" },
     { name = "poethepoet", specifier = ">=0.36.0" },
     { name = "ruff", specifier = ">=0.9.1" },
+]
+docs = [
+    { name = "enum-tools", extras = ["sphinx"], specifier = ">=0.12.0" },
+    { name = "furo", specifier = ">=2024.8.6" },
+    { name = "myst-parser", specifier = ">=4.0.0" },
+    { name = "sphinx", specifier = "==8.1.3" },
+    { name = "sphinx-autodoc-typehints", specifier = ">=3.0.0" },
 ]
 
 [[package]]

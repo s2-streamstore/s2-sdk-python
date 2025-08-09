@@ -12,7 +12,8 @@ dependencies = [
     "anyio>=4.8.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
+dev = ["mypy>=1.14.1", "poethepoet>=0.36.0", "ruff>=0.9.1"]
 docs = [
     "enum-tools[sphinx]>=0.12.0",
     "furo>=2024.8.6",
@@ -20,9 +21,6 @@ docs = [
     "sphinx==8.1.3",
     "sphinx-autodoc-typehints>=3.0.0",
 ]
-
-[dependency-groups]
-dev = ["mypy>=1.14.1", "poethepoet>=0.36.0", "ruff>=0.9.1"]
 
 [build-system]
 requires = ["hatchling"]
@@ -49,4 +47,7 @@ extend-select = ["I"]
 linter = "uv run ruff check --fix"
 formatter = "uv run ruff format"
 type_checker = "uv run mypy"
+ci_linter = "uv run ruff check"
+ci_formatter = "uv run ruff format --check"
 checker = ["linter", "formatter", "type_checker"]
+ci_checker = ["ci_linter", "ci_formatter", "type_checker"]
