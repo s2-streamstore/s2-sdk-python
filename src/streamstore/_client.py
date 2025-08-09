@@ -983,6 +983,7 @@ class Stream:
                             raise RuntimeError(
                                 "Read output doesn't match any of the expected values"
                             )
+                return
             except Exception as e:
                 if attempt < max_attempts and _grpc_retry_on(e):
                     await asyncio.sleep(backoffs[attempt])
