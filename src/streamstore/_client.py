@@ -885,25 +885,30 @@ class Stream:
         self,
         start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
+        until: int | None = None,
         ignore_command_records: bool = False,
     ) -> list[schemas.SequencedRecord] | schemas.Tail:
         """
         Read a batch of records from a stream.
 
         Args:
-            start: Starting position (inclusive).
+            start: Inclusive start position.
             limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
+            until: Exclusive timestamp to read until. It is applied as an additional constraint on
+              top of the ``limit`` and guarantees that all returned records have timestamps less
+              than this timestamp.
             ignore_command_records: Filters out command records if present from the batch.
 
         Returns:
-            Batch of sequenced records. It can be empty only if ``limit`` was provided,
-            and the first record that could have been returned violated the limit.
+            Batch of sequenced records. It can be empty only if ``limit`` and/or ``until`` were provided
+            and no records satisfy those constraints.
 
             (or)
 
-            Tail of the stream. It will be returned only if ``start`` equals or exceeds the tail of the stream.
+            Tail of the stream. It will be returned only if ``start`` equals or exceeds the tail of
+            the stream.
         """
-        request = read_request_message(self.name, start, limit)
+        request = read_request_message(self.name, start, limit, until)
         response = await self._retrier(
             self._stub.Read,
             request,
@@ -928,33 +933,44 @@ class Stream:
         self,
         start: schemas.SeqNum | schemas.Timestamp | schemas.TailOffset,
         limit: schemas.ReadLimit | None = None,
+        until: int | None = None,
+        clamp: bool = False,
         ignore_command_records: bool = False,
     ) -> AsyncIterable[list[schemas.SequencedRecord] | schemas.Tail]:
         """
         Read batches of records from a stream continuously.
 
         Args:
-            start: Starting position (inclusive).
+            start: Inclusive start position.
             limit: Number of records to return, up to a maximum of 1000 or 1MiB of :func:`.metered_bytes`.
+            until: Exclusive timestamp to read until. It is applied as an additional constraint on
+              top of the ``limit`` and guarantees that all returned records have timestamps less
+              than this timestamp.
+            clamp: Clamp the ``start`` position to the stream's tail when it exceeds the tail.
             ignore_command_records: Filters out command records if present from the batch.
 
         Note:
-            With a session, you are able to read in a streaming fashion. If a ``limit`` was not provided
-            and the tail of the stream is reached, the session goes into real-time tailing mode and
-            will yield records as they are appended to the stream.
+            With a session, you are able to read in a streaming fashion. If ``limit`` and/or ``until``
+            were not provided and the tail of the stream is reached, the session goes into
+            real-time tailing mode and will yield records as they are appended to the stream.
 
         Yields:
             Batch of sequenced records.
 
             (or)
 
-            Tail of the stream. It will be yielded only if ``limit`` was provided, and the tail of
-            the stream is reached before meeting it.
+            Tail of the stream. It will be yielded only if ``start`` exceeds the tail and ``clamp``
+            was ``False``.
 
         Returns:
+            If ``limit`` and/or ``until`` were provided, and if there are no further records that
+            satisfy those constraints.
+
+            (or)
+
             If the previous yield was the tail of the stream.
         """
-        request = read_session_request_message(self.name, start, limit)
+        request = read_session_request_message(self.name, start, limit, until, clamp)
         max_attempts = self._config.max_retries
         backoffs = compute_backoffs(max_attempts)
         attempt = 0
