@@ -637,7 +637,7 @@ class ReadSessionResponse(_message.Message):
     ) -> None: ...
 
 class StreamConfig(_message.Message):
-    __slots__ = ("storage_class", "age", "timestamping")
+    __slots__ = ("storage_class", "age", "timestamping", "delete_on_empty")
     class Timestamping(_message.Message):
         __slots__ = ("mode", "uncapped")
         MODE_FIELD_NUMBER: _ClassVar[int]
@@ -650,17 +650,26 @@ class StreamConfig(_message.Message):
             uncapped: bool = ...,
         ) -> None: ...
 
+    class DeleteOnEmpty(_message.Message):
+        __slots__ = ("min_age_secs",)
+        MIN_AGE_SECS_FIELD_NUMBER: _ClassVar[int]
+        min_age_secs: int
+        def __init__(self, min_age_secs: _Optional[int] = ...) -> None: ...
+
     STORAGE_CLASS_FIELD_NUMBER: _ClassVar[int]
     AGE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMPING_FIELD_NUMBER: _ClassVar[int]
+    DELETE_ON_EMPTY_FIELD_NUMBER: _ClassVar[int]
     storage_class: StorageClass
     age: int
     timestamping: StreamConfig.Timestamping
+    delete_on_empty: StreamConfig.DeleteOnEmpty
     def __init__(
         self,
         storage_class: _Optional[_Union[StorageClass, str]] = ...,
         age: _Optional[int] = ...,
         timestamping: _Optional[_Union[StreamConfig.Timestamping, _Mapping]] = ...,
+        delete_on_empty: _Optional[_Union[StreamConfig.DeleteOnEmpty, _Mapping]] = ...,
     ) -> None: ...
 
 class BasinConfig(_message.Message):

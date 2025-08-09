@@ -27,6 +27,8 @@ from streamstore.schemas import (
     StreamInfo,
     TailOffset,
     Timestamp,
+    Timestamping,
+    TimestampingMode,
 )
 
 _ReadStart = SeqNum | Timestamp | TailOffset
@@ -125,6 +127,7 @@ def stream_config_message(
         storage_class = config.storage_class
         retention_age = config.retention_age
         timestamping = config.timestamping
+        delete_on_empty_min_age = config.delete_on_empty_min_age
         if storage_class is not None:
             paths.append(f"{mask_path_prefix}storage_class")
             stream_config.storage_class = msgs.StorageClass(storage_class.value)
@@ -142,6 +145,9 @@ def stream_config_message(
             if timestamping.uncapped is not None:
                 paths.append(f"{mask_path_prefix}timestamping.uncapped")
                 stream_config.timestamping.uncapped = timestamping.uncapped
+        if delete_on_empty_min_age is not None:
+            paths.append(f"{mask_path_prefix}delete_on_empty.min_age_secs")
+            stream_config.delete_on_empty.min_age_secs = delete_on_empty_min_age
     if return_mask_paths:
         return (stream_config, paths)
     return stream_config
@@ -181,6 +187,11 @@ def stream_config_schema(config: msgs.StreamConfig) -> StreamConfig:
     return StreamConfig(
         StorageClass(config.storage_class),
         config.age,
+        Timestamping(
+            mode=TimestampingMode(config.timestamping.mode),
+            uncapped=config.timestamping.uncapped,
+        ),
+        config.delete_on_empty.min_age_secs,
     )
 
 
