@@ -36,7 +36,9 @@ _ReadStart = SeqNum | Timestamp | TailOffset
 
 def append_record_message(record: Record) -> msgs.AppendRecord:
     headers = [msgs.Header(name=name, value=value) for (name, value) in record.headers]
-    return msgs.AppendRecord(headers=headers, body=record.body)
+    return msgs.AppendRecord(
+        timestamp=record.timestamp, headers=headers, body=record.body
+    )
 
 
 def append_input_message(stream: str, input: AppendInput) -> msgs.AppendInput:
