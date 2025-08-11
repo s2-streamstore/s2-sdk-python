@@ -29,14 +29,14 @@ jobs:
               const title = context.payload.pull_request.title;
               const labels = context.payload.pull_request.labels.map(l => l.name);
               if (labels.includes('dev')) {
-                const regex = /^(?!feat|fix|refactor|doc|perf|style|test|chore|revert)[a-z].*$/;
+                const regex = /^(?!feat|fix|refactor|docs|perf|style|test|chore|revert)[a-z].*$/;
                 if (!regex.test(title)) {
                   core.setFailed(
                     `PR title "${title}" does not match the commit format for non-user-facing changes`
                   );
                 }
               } else {
-                const regex = /^(feat|fix|refactor|doc|perf|style|test|chore|revert)!?:[ ][a-z].*$/;
+                const regex = /^(feat|fix|refactor|docs|perf|style|test|chore|revert)!?:[ ][a-z].*$/;
                 if (!regex.test(title)) {
                   core.setFailed(
                     `PR title "${title}" does not match the expected conventional commit format for user-facing changes`

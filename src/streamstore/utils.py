@@ -40,7 +40,7 @@ class CommandRecord:
                 preceeding records in the stream.
 
         Note:
-            If **desired_first_seq_num** was smaller than the sequence number for the first existing
+            If ``desired_first_seq_num`` was smaller than the sequence number for the first existing
             record in the stream, trimming doesn't happen.
         """
         return Record(
@@ -210,8 +210,8 @@ async def append_inputs_gen(
         max_linger_per_batch: Maximum duration for each batch to accumulate records before yielding.
 
     Note:
-        If **max_linger_per_batch** is ``None``, :class:`.AppendInput` will be yielded only
-        when **max_records_per_batch** or **max_bytes_per_batch** is reached.
+        If ``max_linger_per_batch`` is ``None``, :class:`.AppendInput` will be yielded only
+        when ``max_records_per_batch`` or ``max_bytes_per_batch`` is reached.
     """
     append_input_queue: Queue[AppendInput | None] = Queue()
     append_input_aiter = _AppendInputAsyncIterator(append_input_queue)
