@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.0.0] - 2025-08-11
+
+### Features
+
+- Add access token APIs ([#86](https://github.com/s2-streamstore/s2-sdk-python/issues/86))
+- [**breaking**] Support timestamped records ([#88](https://github.com/s2-streamstore/s2-sdk-python/issues/88))
+- Support `clamp` in `read_session`, `until` in `read` and `read_session` ([#90](https://github.com/s2-streamstore/s2-sdk-python/issues/90))
+- Support `delete-on-empty` config for streams  ([#95](https://github.com/s2-streamstore/s2-sdk-python/issues/95))
+
+### Bug Fixes
+
+- Missing return statement in `read_session` ([#92](https://github.com/s2-streamstore/s2-sdk-python/issues/92))
+- Missing `timestamp` in `AppendRecord` msg   ([#96](https://github.com/s2-streamstore/s2-sdk-python/issues/96))
+- Mappings between schema types and proto types  ([#97](https://github.com/s2-streamstore/s2-sdk-python/issues/97))
+
+### Refactor
+
+- [**breaking**] Rename `auth_token` as `access_token` in `S2` init  ([#83](https://github.com/s2-streamstore/s2-sdk-python/issues/83))
+- [**breaking**] Consolidate config params into a single param ([#87](https://github.com/s2-streamstore/s2-sdk-python/issues/87))
+- [**breaking**] Change fencing token type from `bytes` to `str`  ([#89](https://github.com/s2-streamstore/s2-sdk-python/issues/89))
+- [**breaking**] Change return types of `check_tail`, `read`, and `read_session` ([#91](https://github.com/s2-streamstore/s2-sdk-python/issues/91))
+
+### Documentation
+
+- Remove `gRPC` mentions  ([#82](https://github.com/s2-streamstore/s2-sdk-python/issues/82))
+- Consistent wording and styling  ([#102](https://github.com/s2-streamstore/s2-sdk-python/issues/102))
+
+### Styling
+
+- Apply fixes from `uv run poe checker` ([#85](https://github.com/s2-streamstore/s2-sdk-python/issues/85))
+
 ## [3.0.0] - 2025-03-11
 
 ### Refactor
