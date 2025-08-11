@@ -435,7 +435,7 @@ class S2:
             timeout=self._config.rpc.timeout,
             metadata=self._config.rpc.metadata,
         )
-        return response.token
+        return response.access_token
 
     @fallible
     async def list_access_tokens(
@@ -449,7 +449,9 @@ class S2:
             start_after: Filter to access tokens whose ID lexicographically starts after this value.
             limit: Number of results, up to a maximum of 1000.
         """
-        request = ListAccessTokensRequest(prefix, start_after, limit)
+        request = ListAccessTokensRequest(
+            prefix=prefix, start_after=start_after, limit=limit
+        )
         response = await self._retrier(
             self._stub.ListAccessTokens,
             request,
@@ -457,7 +459,7 @@ class S2:
             metadata=self._config.rpc.metadata,
         )
         return schemas.Page(
-            items=[access_token_info_schema(info) for info in response.tokens],
+            items=[access_token_info_schema(info) for info in response.access_tokens],
             has_more=response.has_more,
         )
 
@@ -469,7 +471,7 @@ class S2:
         Args:
             id: Access token ID.
         """
-        request = RevokeAccessTokenRequest(id)
+        request = RevokeAccessTokenRequest(id=id)
         response = await self._retrier(
             self._stub.RevokeAccessToken,
             request,
