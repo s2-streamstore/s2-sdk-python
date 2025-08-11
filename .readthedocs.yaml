@@ -9,9 +9,12 @@ build:
     python: "3.11"
   jobs:
     create_environment:
-      - pip install uv
+      - asdf plugin add uv
+      - asdf install uv 0.8.2
+      - asdf global uv 0.8.2
+      - UV_PROJECT_ENVIRONMENT=$READTHEDOCS_VIRTUALENV_PATH uv sync --group docs
     install:
-      - uv sync --group docs
+      - "true"
 
 sphinx:
   configuration: docs/source/conf.py
