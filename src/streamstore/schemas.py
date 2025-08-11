@@ -189,7 +189,7 @@ class Page(Generic[T]):
 
     #: List of items of any type T.
     items: list[T]
-    #: If True, it means that there are more pages.
+    #: If ``True``, it means that there are more pages.
     has_more: bool
 
 

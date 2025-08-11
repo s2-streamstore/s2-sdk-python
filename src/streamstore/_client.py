@@ -149,13 +149,13 @@ class S2:
 
     Args:
         access_token: Access token generated from `S2 dashboard <https://s2.dev/dashboard>`_.
-        endpoints: S2 endpoints. If None, public endpoints for S2 service running in AWS cloud will be used.
-        request_timeout: Timeout for requests made by the client. Default value is 5 seconds.
-        max_retries: Maximum number of retries for a request. Default value is 3.
+        endpoints: S2 endpoints. If not specified, public endpoints for S2 service running in AWS cloud will be used.
+        request_timeout: Timeout for requests made by the client. Default value is ``5`` seconds.
+        max_retries: Maximum number of retries for a request. Default value is ``3``.
         enable_append_retries: Enable retries for appends i.e for both :meth:`.Stream.append` and
-            :meth:`.Stream.append_session`. Default value is True.
+            :meth:`.Stream.append_session`. Default value is ``True``.
         enable_compression: Enable compression (Gzip) for :meth:`.Stream.append`, :meth:`.Stream.append_session`,
-            :meth:`.Stream.read`, and :meth:`.Stream.read_session`. Default value is False.
+            :meth:`.Stream.read`, and :meth:`.Stream.read_session`. Default value is ``False``.
     """
 
     __slots__ = (
@@ -249,7 +249,7 @@ class S2:
             config: Configuration for the basin.
 
         Note:
-            **name** must be globally unique and must be between 8 and 48 characters, comprising lowercase
+            ``name`` must be globally unique and must be between 8 and 48 characters, comprising lowercase
             letters, numbers and hyphens. It cannot begin or end with a hyphen.
         """
         _validate_basin(name)
@@ -307,18 +307,15 @@ class S2:
         self,
         prefix: str = "",
         start_after: str = "",
-        limit: int | None = None,
+        limit: int = 1000,
     ) -> schemas.Page[schemas.BasinInfo]:
         """
         List basins.
 
         Args:
-            prefix: List only those that begin with this value.
-            start_after: List only those that lexicographically start after this value,
-                which can be the name of the last item from previous page, to continue from there.
-                It must be greater than or equal to the prefix if specified.
-            limit: Number of items to return in one page. Maximum number of items that can be
-                returned in one page is 1000.
+            prefix: Filter to basins whose name begins with this prefix.
+            start_after: Filter to basins whose name starts lexicographically after this value.
+            limit: Number of items to return per page, up to a maximum of 1000.
         """
         request = ListBasinsRequest(prefix=prefix, start_after=start_after, limit=limit)
         response = await self._retrier(
@@ -424,7 +421,7 @@ class S2:
               from stream names in responses.
 
         Note:
-            **id** must be unique to the account and between 1 and 96 bytes in length.
+            ``id`` must be unique to the account and between 1 and 96 bytes in length.
         """
         request = IssueAccessTokenRequest(
             info=access_token_info_message(id, scope, auto_prefix_streams, expires_at)
@@ -446,8 +443,8 @@ class S2:
 
         Args:
             prefix: Filter to access tokens whose ID begins with this prefix.
-            start_after: Filter to access tokens whose ID lexicographically starts after this value.
-            limit: Number of results, up to a maximum of 1000.
+            start_after: Filter to access tokens whose ID starts lexicographically after this value.
+            limit: Number of items to return per page, up to a maximum of 1000.
         """
         request = ListAccessTokensRequest(
             prefix=prefix, start_after=start_after, limit=limit
@@ -536,8 +533,8 @@ class Basin:
             config: Configuration for the stream.
 
         Note:
-            **name** must be unique within the basin. It can be an arbitrary string upto 512 characters.
-            Backslash (`/`) is recommended as a delimiter for hierarchical naming.
+            ``name`` must be unique within the basin. It can be an arbitrary string upto 512 characters.
+            Backslash (``/``) is recommended as a delimiter for hierarchical naming.
         """
         request = CreateStreamRequest(
             stream=name,
@@ -588,18 +585,15 @@ class Basin:
         self,
         prefix: str = "",
         start_after: str = "",
-        limit: int | None = None,
+        limit: int = 1000,
     ) -> schemas.Page[schemas.StreamInfo]:
         """
         List streams.
 
         Args:
-            prefix: List only those that begin with this value.
-            start_after: List only those that lexicographically start after this value,
-                which can be the name of the last item from previous page, to continue from there.
-                It must be greater than or equal to the prefix if specified.
-            limit: Number of items to return in one page. Maximum number of items that can be
-                returned in one page is 1000.
+            prefix: Filter to streams whose name begins with this prefix.
+            start_after: Filter to streams whose name starts lexicographically after this value.
+            limit: Number of items to return per page, up to a maximum of 1000.
         """
         request = ListStreamsRequest(
             prefix=prefix, start_after=start_after, limit=limit
