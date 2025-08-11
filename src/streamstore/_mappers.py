@@ -132,18 +132,15 @@ def stream_config_message(
         delete_on_empty_min_age = config.delete_on_empty_min_age
         if storage_class is not None:
             paths.append(f"{mask_path_prefix}storage_class")
-            stream_config.storage_class = msgs.StorageClass(storage_class.value)
+            stream_config.storage_class = storage_class.value
         if retention_age is not None:
             paths.append(f"{mask_path_prefix}retention_policy")
             stream_config.age = retention_age
         if timestamping is not None:
             paths.append(f"{mask_path_prefix}timestamping")
-            stream_config.timestamping = msgs.StreamConfig.Timestamping()
             if timestamping.mode is not None:
                 paths.append(f"{mask_path_prefix}timestamping.mode")
-                stream_config.timestamping.mode = msgs.TimestampingMode(
-                    timestamping.mode.value
-                )
+                stream_config.timestamping.mode = timestamping.mode.value
             if timestamping.uncapped is not None:
                 paths.append(f"{mask_path_prefix}timestamping.uncapped")
                 stream_config.timestamping.uncapped = timestamping.uncapped
@@ -176,7 +173,7 @@ def basin_config_message(
             default_stream_config = cast(
                 msgs.StreamConfig, stream_config_message(config.default_stream_config)
             )
-        basin_config.default_stream_config = default_stream_config
+        basin_config.default_stream_config.CopyFrom(default_stream_config)
         if config.create_stream_on_append is not None:
             basin_config.create_stream_on_append = config.create_stream_on_append
             paths.append("create_stream_on_append")
@@ -266,7 +263,7 @@ def access_token_info_message(
             case Permission.READ_WRITE:
                 read = True
                 write = True
-        return msgs.ReadWritePermissions(read, write)
+        return msgs.ReadWritePermissions(read=read, write=write)
 
     def permitted_op_groups(
         op_group_perms: OperationGroupPermissions | None,
@@ -288,13 +285,15 @@ def access_token_info_message(
             streams=resource_set(scope.streams),
             access_tokens=resource_set(scope.access_tokens),
             op_groups=permitted_op_groups(scope.op_group_perms),
-            ops=(msgs.Operation(op.value) for op in scope.ops) if scope.ops else None,
+            ops=(op.value for op in scope.ops),
         ),
     )
 
 
 def access_token_info_schema(info: msgs.AccessTokenInfo) -> AccessTokenInfo:
-    def resource_match_rule(resource_set: msgs.ResourceSet) -> ResourceMatchRule:
+    def resource_match_rule(resource_set: msgs.ResourceSet) -> ResourceMatchRule | None:
+        if not resource_set.HasField("matching"):
+            return None
         match resource_set.WhichOneof("matching"):
             case "exact":
                 return ResourceMatchRule(ResourceMatchOp.EXACT, resource_set.exact)

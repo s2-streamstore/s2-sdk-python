@@ -258,6 +258,7 @@ class TimestampingMode(DocEnum):
         The arrival time is always in milliseconds since Unix epoch.
     """
 
+    UNSPECIFIED = 0, "Defaults to ``CLIENT_PREFER``."
     CLIENT_PREFER = (
         1,
         "Prefer client-specified timestamp if present, otherwise use arrival time.",
@@ -414,7 +415,7 @@ class AccessTokenScope:
     #:
     #: Note:
     #:  A union of allowed operations and groups is used as the effective set of allowed operations.
-    ops: list[Operation] | None = None
+    ops: list[Operation] = field(default_factory=list)
 
 
 @dataclass(slots=True)
