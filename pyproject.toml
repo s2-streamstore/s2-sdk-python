@@ -14,6 +14,12 @@ dependencies = [
 
 [dependency-groups]
 dev = ["mypy>=1.14.1", "poethepoet>=0.36.0", "ruff>=0.9.1"]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.5.0",
+]
 docs = [
     "enum-tools[sphinx]>=0.12.0",
     "furo>=2024.8.6",
@@ -27,7 +33,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.mypy]
-files = ["src/"]
+files = ["src/", "tests/", "examples/"]
 
 [tool.ruff]
 exclude = [
@@ -51,3 +57,7 @@ ci_linter = "uv run ruff check"
 ci_formatter = "uv run ruff format --check"
 checker = ["linter", "formatter", "type_checker"]
 ci_checker = ["ci_linter", "ci_formatter", "type_checker"]
+e2e_tests = "uv run pytest tests/ -v -s"
+e2e_account_tests = "uv run pytest tests/ -v -s -m account"
+e2e_basin_tests = "uv run pytest tests/ -v -s -m basin"
+e2e_stream_tests = "uv run pytest tests/ -v -s -m stream"

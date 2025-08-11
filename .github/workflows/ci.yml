@@ -13,12 +13,14 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           version: "0.8.2"
+      - name: Sync dependencies
+        run: |
+          uv sync --all-groups
       - name: Static code check
         run: uv run poe ci_checker
       - name: Check docs build
         working-directory: ./docs
         run: |
-          uv sync --group docs
           make html
       - name: Check PR title style
         uses: actions/github-script@v7
