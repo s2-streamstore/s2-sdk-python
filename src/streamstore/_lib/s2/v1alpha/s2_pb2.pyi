@@ -637,7 +637,7 @@ class ReadSessionResponse(_message.Message):
     ) -> None: ...
 
 class StreamConfig(_message.Message):
-    __slots__ = ("storage_class", "age", "timestamping", "delete_on_empty")
+    __slots__ = ("storage_class", "age", "infinite", "timestamping", "delete_on_empty")
     class Timestamping(_message.Message):
         __slots__ = ("mode", "uncapped")
         MODE_FIELD_NUMBER: _ClassVar[int]
@@ -656,18 +656,25 @@ class StreamConfig(_message.Message):
         min_age_secs: int
         def __init__(self, min_age_secs: _Optional[int] = ...) -> None: ...
 
+    class InfiniteRetention(_message.Message):
+        __slots__ = ()
+        def __init__(self) -> None: ...
+
     STORAGE_CLASS_FIELD_NUMBER: _ClassVar[int]
     AGE_FIELD_NUMBER: _ClassVar[int]
+    INFINITE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMPING_FIELD_NUMBER: _ClassVar[int]
     DELETE_ON_EMPTY_FIELD_NUMBER: _ClassVar[int]
     storage_class: StorageClass
     age: int
+    infinite: StreamConfig.InfiniteRetention
     timestamping: StreamConfig.Timestamping
     delete_on_empty: StreamConfig.DeleteOnEmpty
     def __init__(
         self,
         storage_class: _Optional[_Union[StorageClass, str]] = ...,
         age: _Optional[int] = ...,
+        infinite: _Optional[_Union[StreamConfig.InfiniteRetention, _Mapping]] = ...,
         timestamping: _Optional[_Union[StreamConfig.Timestamping, _Mapping]] = ...,
         delete_on_empty: _Optional[_Union[StreamConfig.DeleteOnEmpty, _Mapping]] = ...,
     ) -> None: ...

@@ -36,7 +36,7 @@ class TestAccountOperations:
         config = BasinConfig(
             default_stream_config=StreamConfig(
                 storage_class=StorageClass.STANDARD,
-                retention_age=86400 * 7,
+                retention_policy=86400 * 7,
                 timestamping=Timestamping(
                     mode=TimestampingMode.CLIENT_REQUIRE,
                     uncapped=True,
@@ -60,7 +60,7 @@ class TestAccountOperations:
         config = BasinConfig(
             default_stream_config=StreamConfig(
                 storage_class=StorageClass.STANDARD,
-                retention_age=3600,
+                retention_policy=3600,
             ),
             create_stream_on_append=True,
         )
@@ -73,8 +73,8 @@ class TestAccountOperations:
             == config.default_stream_config.storage_class
         )
         assert (
-            updated_config.default_stream_config.retention_age
-            == config.default_stream_config.retention_age
+            updated_config.default_stream_config.retention_policy
+            == config.default_stream_config.retention_policy
         )
         assert updated_config.create_stream_on_append == config.create_stream_on_append
 
