@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [5.0.0] - 2025-09-03
+
+### Refactor
+
+- [**breaking**] Replace `retention_age` with `retention_policy`  ([#104](https://github.com/s2-streamstore/s2-sdk-python/issues/104))
+
 ## [4.0.0] - 2025-08-11
 
 ### Features
