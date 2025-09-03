@@ -35,7 +35,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from streamstore._exceptions import fallible
 
@@ -294,13 +294,15 @@ class StreamConfig:
     #:
     #: If not specified, the default is :attr:`.StorageClass.EXPRESS`.
     storage_class: StorageClass | None = None
-    #: Age in seconds for automatic trimming of records older than this threshold.
+    #: Retention policy for records in this stream.
+    #:
+    #: Retention duration in seconds to automatically trim records older than this duration.
+    #:
+    #: ``'infinite'`` to retain records indefinitely.
+    #: (While S2 is in public preview, this is capped at 28 days. Let us know if you'd like the cap removed.)
     #:
     #: If not specified, the default is to retain records for 7 days.
-    #:
-    #: If set to ``0``, the stream will have infinite retention.
-    #: (While S2 is in public preview, this is capped at 28 days. Let us know if you'd like the cap removed.)
-    retention_age: int | None = None
+    retention_policy: int | Literal["infinite"] | None = None
     #: Timestamping behavior for appends to this stream, which influences how timestamps are handled.
     timestamping: Timestamping | None = None
     #: Minimum age in seconds before this stream can be automatically deleted if empty.

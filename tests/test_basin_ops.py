@@ -30,7 +30,7 @@ class TestBasinOperations:
 
         config = StreamConfig(
             storage_class=StorageClass.STANDARD,
-            retention_age=86400 * 3,
+            retention_policy=86400 * 3,
             timestamping=Timestamping(
                 mode=TimestampingMode.ARRIVAL,
                 uncapped=False,
@@ -53,20 +53,30 @@ class TestBasinOperations:
 
         config = await basin.get_stream_config(stream.name)
         assert config.storage_class == StorageClass.EXPRESS
-        assert config.retention_age == 86400 * 7
+        assert config.retention_policy == 86400 * 7
 
     async def test_reconfigure_stream(self, shared_basin: Basin, stream: Stream):
         basin = shared_basin
-
         config = StreamConfig(
             storage_class=StorageClass.STANDARD,
-            retention_age=86400 * 21,
+            retention_policy="infinite",
             timestamping=Timestamping(
                 mode=TimestampingMode.CLIENT_REQUIRE, uncapped=True
             ),
             delete_on_empty_min_age=1800,
         )
 
+        updated_config = await basin.reconfigure_stream(stream.name, config)
+        assert updated_config == config
+
+        config = StreamConfig(
+            storage_class=StorageClass.EXPRESS,
+            retention_policy=86400 * 90,
+            timestamping=Timestamping(
+                mode=TimestampingMode.CLIENT_PREFER, uncapped=False
+            ),
+            delete_on_empty_min_age=3600,
+        )
         updated_config = await basin.reconfigure_stream(stream.name, config)
         assert updated_config == config
 

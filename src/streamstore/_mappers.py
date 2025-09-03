@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import cast
+from typing import Literal, cast
 
 from google.protobuf.internal.containers import RepeatedCompositeFieldContainer
 
@@ -127,15 +127,18 @@ def stream_config_message(
     stream_config = msgs.StreamConfig()
     if config:
         storage_class = config.storage_class
-        retention_age = config.retention_age
+        retention_policy = config.retention_policy
         timestamping = config.timestamping
         delete_on_empty_min_age = config.delete_on_empty_min_age
         if storage_class is not None:
             paths.append(f"{mask_path_prefix}storage_class")
             stream_config.storage_class = storage_class.value
-        if retention_age is not None:
+        if retention_policy is not None:
             paths.append(f"{mask_path_prefix}retention_policy")
-            stream_config.age = retention_age
+            if retention_policy == "infinite":
+                stream_config.infinite.CopyFrom(msgs.StreamConfig.InfiniteRetention())
+            else:
+                stream_config.age = retention_policy
         if timestamping is not None:
             paths.append(f"{mask_path_prefix}timestamping")
             if timestamping.mode is not None:
@@ -183,9 +186,19 @@ def basin_config_message(
 
 
 def stream_config_schema(config: msgs.StreamConfig) -> StreamConfig:
+    retention_policy: int | Literal["infinite"]
+    match config.WhichOneof("retention_policy"):
+        case "age":
+            retention_policy = config.age
+        case "infinite":
+            retention_policy = "infinite"
+        case _:
+            raise RuntimeError(
+                "StreamConfig retention_policy doesn't match any of the expected values"
+            )
     return StreamConfig(
         StorageClass(config.storage_class),
-        config.age,
+        retention_policy,
         Timestamping(
             mode=TimestampingMode(config.timestamping.mode),
             uncapped=config.timestamping.uncapped,
