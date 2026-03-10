@@ -11,3 +11,6 @@ wheels/
 
 # Sphinx
 docs/build
+
+# Claude Code
+.claude/
