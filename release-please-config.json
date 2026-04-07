@@ -1,0 +1,12 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "python",
+      "package-name": "s2-sdk",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        "docs/source/conf.py"
+      ]
+    }
+  }
+}

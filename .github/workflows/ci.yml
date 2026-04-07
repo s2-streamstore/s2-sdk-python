@@ -1,0 +1,77 @@
+name: CI
+
+# NOTE: keep UV_VERSION in sync with uv-version in s2-lite-integration-tests sdks JSON below.
+env:
+  UV_VERSION: "0.11.3"
+
+on:
+  pull_request:
+    types:
+      [
+        opened,
+        synchronize,
+        ready_for_review,
+        reopened,
+      ]
+jobs:
+  local-checks:
+    name: Local Checks (code quality, unit tests, docs build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Sync dependencies
+        run: |
+          uv sync --all-groups
+      - name: Static code check
+        run: uv run poe ci_checker
+      - name: Unit tests
+        run: uv run pytest tests/ -v -m 'not (account or basin or stream or metrics)'
+      - name: Check docs build
+        working-directory: ./docs
+        run: |
+          make html
+  s2-cloud-integration-tests:
+    name: s2-cloud integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+      - name: Sync dependencies
+        run: uv sync --group test
+      - name: Run integration tests
+        env:
+          S2_ACCESS_TOKEN: ${{ secrets.S2_ACCESS_TOKEN }}
+        run: uv run pytest tests/ -v -s -m 'account or basin or stream or metrics'
+
+  build-s2-lite:
+    name: Build s2-lite
+    uses: s2-streamstore/s2/.github/workflows/build-s2-lite.yml@main
+
+  s2-lite-integration-tests:
+    name: s2-lite integration tests
+    needs: build-s2-lite
+    uses: s2-streamstore/s2/.github/workflows/sdk-tests.yml@main
+    with:
+      server-binary: server
+      server-args: "--port 8080"
+      server-port: 8080
+      sdks: |
+        [
+          {
+            "name": "python",
+            "repo": "${{ github.repository }}",
+            "ref": "${{ github.ref }}",
+            "lang": "python",
+            "uv-version": "0.11.3",
+            "test_cmd": "uv run pytest tests/ -v -s -m '(account or basin or stream) and not cloud_only'"
+          }
+        ]
