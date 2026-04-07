@@ -208,7 +208,11 @@ class Batching:
     """Maximum metered bytes per batch. Must be between 8 and 1 MiB. Default is 1 MiB."""
 
     linger: timedelta = field(default_factory=lambda: timedelta(milliseconds=5))
-    """Maximum time to wait for more records before flushing a partial batch. Default is 5 ms."""
+    """Maximum time to wait for more records before flushing a partial batch. Default is 5 ms.
+
+    Note:
+        If set to 0, batches are flushed only when ``max_records`` or ``max_bytes`` is reached.
+    """
 
 
 @dataclass(slots=True)
