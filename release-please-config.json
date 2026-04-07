@@ -1,10 +1,11 @@
 {
-  "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "pull-request-title-pattern": "chore: release s2-sdk ${version}",
   "packages": {
     ".": {
       "release-type": "python",
       "package-name": "s2-sdk",
       "bump-minor-pre-major": true,
+      "include-component-in-tag": false,
       "extra-files": [
         "docs/source/conf.py"
       ]
