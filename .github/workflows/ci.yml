@@ -27,8 +27,8 @@ jobs:
       - name: Sync dependencies
         run: |
           uv sync --all-groups
-      - name: Static code check
-        run: uv run poe ci_checker
+      - name: Code quality check
+        run: uv run poe cq-check
       - name: Unit tests
         run: uv run pytest tests/ -v -m 'not (account or basin or stream or metrics)'
       - name: Check docs build
