@@ -112,11 +112,12 @@ class Producer:
         if self._closed:
             return
         self._closed = True
-        await self._flush()
-        await self._session.close()
-        # Signal drain task to finish and wait for it
-        self._batch_ready.set()
-        await self._drain_task
+        try:
+            await self._flush()
+            await self._session.close()
+        finally:
+            self._batch_ready.set()
+            await self._drain_task
         if self._error is not None:
             raise self._error
 
