@@ -209,6 +209,7 @@ async def _body_gen(
     while True:
         inp = await input_queue.get()
         if inp is None:
+            await input_queue.put(None)
             return
         encoded = _encode_input(inp, compression)
         inflight_inputs.append(
