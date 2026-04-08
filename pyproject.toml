@@ -61,13 +61,13 @@ exclude = [
 extend-select = ["I"]
 
 [tool.poe.tasks]
-linter = "uv run ruff check --fix"
-formatter = "uv run ruff format"
-type_checker = "uv run mypy"
-ci_linter = "uv run ruff check"
-ci_formatter = "uv run ruff format --check"
-checker = ["linter", "formatter", "type_checker"]
-ci_checker = ["ci_linter", "ci_formatter", "type_checker"]
+lint = "uv run ruff check"
+lint-fix = "uv run ruff check --fix"
+format = "uv run ruff format"
+format-check = "uv run ruff format --check"
+typecheck = "uv run mypy"
+cq-check = ["lint", "format-check", "typecheck"]
+cq-fix = ["lint-fix", "format", "typecheck"]
 docs_check = "uv run --group docs sphinx-build -W -b html docs/source docs/build/html"
 docs_clean = "rm -rf docs/build"
 docs_live.sequence = ["docs_clean", "docs_check", {cmd = "uv run --group docs sphinx-autobuild docs/source docs/build/html --watch src/s2_sdk"}]

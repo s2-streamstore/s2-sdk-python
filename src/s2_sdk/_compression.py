@@ -1,5 +1,3 @@
-"""S2S message-level compression (zstd and gzip)."""
-
 import gzip
 
 import zstandard
