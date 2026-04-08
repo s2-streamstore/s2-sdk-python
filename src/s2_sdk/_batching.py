@@ -64,9 +64,17 @@ async def append_record_batches(
             continue
 
         try:
+            deadline = (
+                asyncio.get_event_loop().time() + linger_secs
+                if linger_secs > 0
+                else None
+            )
             while not acc.is_full():
-                if linger_secs > 0:
-                    record = await asyncio.wait_for(anext(aiter), timeout=linger_secs)
+                if deadline is not None:
+                    remaining = deadline - asyncio.get_event_loop().time()
+                    if remaining <= 0:
+                        break
+                    record = await asyncio.wait_for(anext(aiter), timeout=remaining)
                 else:
                     record = await anext(aiter)
                 acc.add(record)
