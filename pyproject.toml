@@ -65,13 +65,13 @@ lint = "uv run ruff check"
 lint-fix = "uv run ruff check --fix"
 format = "uv run ruff format"
 format-check = "uv run ruff format --check"
-typecheck = "uv run mypy"
-cq-check = ["lint", "format-check", "typecheck"]
-cq-fix = ["lint-fix", "format", "typecheck"]
-docs_check = "uv run --group docs sphinx-build -W -b html docs/source docs/build/html"
-docs_clean = "rm -rf docs/build"
-docs_live.sequence = ["docs_clean", "docs_check", {cmd = "uv run --group docs sphinx-autobuild docs/source docs/build/html --watch src/s2_sdk"}]
-e2e_tests = "uv run pytest tests/ -v -s -m 'account or basin or stream'"
-e2e_account_tests = "uv run pytest tests/ -v -s -m account"
-e2e_basin_tests = "uv run pytest tests/ -v -s -m basin"
-e2e_stream_tests = "uv run pytest tests/ -v -s -m stream"
+type-check = "uv run mypy"
+cq-check = ["lint", "format-check", "type-check"]
+cq-fix = ["lint-fix", "format", "type-check"]
+docs-check = "uv run --group docs sphinx-build -W -b html docs/source docs/build/html"
+docs-clean = "rm -rf docs/build"
+docs-live.sequence = ["docs-clean", "docs-check", {cmd = "uv run --group docs sphinx-autobuild docs/source docs/build/html --watch src/s2_sdk"}]
+e2e-tests = "uv run pytest tests/ -v -s -m 'account or basin or stream'"
+e2e-account-tests = "uv run pytest tests/ -v -s -m account"
+e2e-basin-tests = "uv run pytest tests/ -v -s -m basin"
+e2e-stream-tests = "uv run pytest tests/ -v -s -m stream"
