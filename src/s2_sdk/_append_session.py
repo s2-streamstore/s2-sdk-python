@@ -141,7 +141,8 @@ class AppendSession:
     def _resolve_next(self, ack: AppendAck) -> None:
         unacked = self._unacked.popleft()
         self._permits.release(unacked.metered_bytes)
-        unacked.ack_fut.set_result(ack)
+        if not unacked.ack_fut.done():
+            unacked.ack_fut.set_result(ack)
 
     def _fail_all(self, error: BaseException) -> None:
         self._error = error
