@@ -50,41 +50,47 @@ async def append_record_batches(
     validate_batching(batching.max_records, batching.max_bytes)
     acc = BatchAccumulator(batching)
     linger_secs = batching.linger.total_seconds()
-    aiter = records.__aiter__()
+    record_iter = records.__aiter__()
+    pending_next = None
 
-    while True:
-        try:
-            record = await anext(aiter)
-        except StopAsyncIteration:
-            break
+    try:
+        while True:
+            if pending_next is not None:
+                record = await pending_next
+                pending_next = None
+            else:
+                record = await anext(record_iter, None)
+            if record is None:
+                break
 
-        acc.add(record)
-        if acc.is_full():
-            yield acc.take()
-            continue
+            acc.add(record)
 
-        try:
             deadline = (
-                asyncio.get_event_loop().time() + linger_secs
+                asyncio.get_running_loop().time() + linger_secs
                 if linger_secs > 0
                 else None
             )
             while not acc.is_full():
                 if deadline is not None:
-                    remaining = deadline - asyncio.get_event_loop().time()
+                    remaining = deadline - asyncio.get_running_loop().time()
                     if remaining <= 0:
                         break
-                    record = await asyncio.wait_for(anext(aiter), timeout=remaining)
+                    next_task = asyncio.create_task(anext(record_iter, None))
+                    done, _ = await asyncio.wait({next_task}, timeout=remaining)
+                    if not done:
+                        pending_next = next_task
+                        break
+                    record = next_task.result()
                 else:
-                    record = await anext(aiter)
+                    record = await anext(record_iter, None)
+                if record is None:
+                    break
                 acc.add(record)
-        except StopAsyncIteration:
-            pass
-        except TimeoutError:
-            pass
 
-        if not acc.is_empty():
             yield acc.take()
+    finally:
+        if pending_next is not None:
+            pending_next.cancel()
 
 
 async def append_inputs(

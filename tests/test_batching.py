@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 
 import pytest
@@ -61,6 +62,26 @@ async def test_oversized_record_passes():
         batches.append(batch)
     assert len(batches) == 1
     assert len(batches[0]) == 1
+
+
+@pytest.mark.asyncio
+async def test_linger_flushes_batches():
+    async def delayed_records():
+        yield Record(body=b"r1")
+        await asyncio.sleep(0.1)  # Longer than linger
+        yield Record(body=b"r2")
+        yield Record(body=b"r3")
+
+    batches = []
+    async for batch in append_record_batches(
+        delayed_records(),
+        batching=Batching(max_records=10, linger=timedelta(seconds=0.01)),
+    ):
+        batches.append(batch)
+
+    assert len(batches) == 2
+    assert len(batches[0]) == 1  # r1 (linger expired)
+    assert len(batches[1]) == 2  # r2, r3
 
 
 @pytest.mark.asyncio
