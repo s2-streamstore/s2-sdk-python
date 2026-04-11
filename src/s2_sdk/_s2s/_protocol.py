@@ -176,13 +176,11 @@ def _handle_terminal(body: bytes) -> None:
 
     code = error.get("code", UNKNOWN_CODE) if isinstance(error, dict) else UNKNOWN_CODE
 
-    if status_code == 412:
-        raise_for_412(error, code)
-
-    if status_code == 416:
-        raise_for_416(error, code)
-
     if isinstance(error, dict):
+        if status_code == 412:
+            raise_for_412(error, code)
+        if status_code == 416:
+            raise_for_416(error, code)
         message = error.get("message", str(error))
     else:
         message = str(error)
