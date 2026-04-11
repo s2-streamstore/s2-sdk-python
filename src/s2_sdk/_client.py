@@ -171,12 +171,10 @@ class HttpClient:
             raise ReadTimeoutError("Request timed out")
         finally:
             if stream_id is not None:
-                nbytes = _take_all_unacked_flow_bytes(state)
-                if nbytes > 0:
-                    try:
-                        await conn.ack_data(stream_id, nbytes)
-                    except Exception:
-                        pass
+                try:
+                    await conn.ack_all_data(stream_id, state)
+                except Exception:
+                    pass
                 if not state.ended.is_set():
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
@@ -263,12 +261,10 @@ class HttpClient:
                     pass
             # Ack remaining flow bytes to keep connection window healthy
             if stream_id is not None:
-                nbytes = _take_all_unacked_flow_bytes(state)
-                if nbytes > 0:
-                    try:
-                        await conn.ack_data(stream_id, nbytes)
-                    except Exception:
-                        pass
+                try:
+                    await conn.ack_all_data(stream_id, state)
+                except Exception:
+                    pass
                 if not state.ended.is_set():
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
@@ -768,6 +764,16 @@ class Connection:
             self._h2.acknowledge_received_data(nbytes, stream_id)
             await self._flush_h2_data()
 
+    async def ack_all_data(self, stream_id: int, state: _StreamState) -> None:
+        """Acknowledge all received data for stream cleanup."""
+        assert self._h2 is not None
+        async with self._write_lock:
+            nbytes = state.unacked_flow_bytes
+            state.unacked_flow_bytes = 0
+            if nbytes > 0:
+                self._h2.acknowledge_received_data(nbytes, stream_id)
+                await self._flush_h2_data()
+
     async def reset_stream(self, stream_id: int) -> None:
         """Send RST_STREAM to tell the peer to stop sending."""
         assert self._h2 is not None
@@ -987,12 +993,6 @@ def _queue_item_parts(item: tuple[bytes, int] | bytes) -> tuple[bytes, int]:
     if isinstance(item, tuple):
         return item
     return item, len(item)
-
-
-def _take_all_unacked_flow_bytes(state: _StreamState) -> int:
-    nbytes = state.unacked_flow_bytes
-    state.unacked_flow_bytes = 0
-    return nbytes
 
 
 def _parse_retry_after_ms(raw: str | None) -> float | None:

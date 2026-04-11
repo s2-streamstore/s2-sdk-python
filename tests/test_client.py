@@ -209,7 +209,7 @@ async def test_unary_request_timeout_acks_and_resets_stream():
     conn = AsyncMock()
     conn.send_headers = AsyncMock(return_value=1)
     conn.release_stream = MagicMock()
-    conn.ack_data = AsyncMock()
+    conn.ack_all_data = AsyncMock()
     conn.reset_stream = AsyncMock()
 
     pc = MagicMock()
@@ -226,7 +226,7 @@ async def test_unary_request_timeout_acks_and_resets_stream():
     with pytest.raises(ReadTimeoutError, match="Request timed out"):
         await client.unary_request("GET", "/v1/test")
 
-    conn.ack_data.assert_awaited_once_with(1, 11)
+    conn.ack_all_data.assert_awaited_once_with(1, state)
     conn.reset_stream.assert_awaited_once_with(1)
     conn.release_stream.assert_called_once_with(1, state)
     pc.touch_idle.assert_called_once()
