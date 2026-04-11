@@ -10,7 +10,7 @@ from datetime import date
 
 project = "s2-sdk"
 copyright = f"{date.today().year}, Bandar Systems Inc"
-release = "0.1.1"  # x-release-please-version
+release = "0.1.2"  # x-release-please-version
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
