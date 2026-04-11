@@ -272,6 +272,7 @@ class CommandRecord:
         return Record(body=encoded_token, headers=[(bytes(), CommandRecord.FENCE)])
 
     @staticmethod
+    @fallible
     def trim(desired_first_seq_num: int) -> Record:
         """Create a trim command record.
 
