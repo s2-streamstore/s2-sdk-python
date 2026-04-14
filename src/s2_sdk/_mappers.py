@@ -340,21 +340,8 @@ def append_ack_from_proto(ack: pb.AppendAck) -> AppendAck:
     )
 
 
-def read_batch_from_proto(
-    batch: pb.ReadBatch, ignore_command_records: bool = False
-) -> ReadBatch:
-    records = []
-    for sr in batch.records:
-        if ignore_command_records and _is_command_record(sr):
-            continue
-        records.append(
-            SequencedRecord(
-                seq_num=sr.seq_num,
-                body=sr.body,
-                headers=[(h.name, h.value) for h in sr.headers],
-                timestamp=sr.timestamp,
-            )
-        )
+def read_batch_from_proto(batch: pb.ReadBatch) -> ReadBatch:
+    records = [sequenced_record_from_proto(sr) for sr in batch.records]
     tail = None
     if batch.HasField("tail"):
         tail = StreamPosition(
@@ -371,12 +358,6 @@ def sequenced_record_from_proto(sr: pb.SequencedRecord) -> SequencedRecord:
         headers=[(h.name, h.value) for h in sr.headers],
         timestamp=sr.timestamp,
     )
-
-
-def _is_command_record(sr: pb.SequencedRecord) -> bool:
-    if len(sr.headers) == 1 and sr.headers[0].name == b"":
-        return True
-    return False
 
 
 def read_start_params(start: _ReadStart) -> dict[str, Any]:

@@ -242,6 +242,10 @@ class SequencedRecord:
     timestamp: int
     """Timestamp for this record."""
 
+    def is_command_record(self) -> bool:
+        """Check if this is a command record."""
+        return len(self.headers) == 1 and self.headers[0][0] == b""
+
 
 @dataclass(slots=True)
 class ReadBatch:

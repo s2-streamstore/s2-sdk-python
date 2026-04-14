@@ -81,7 +81,7 @@ async def run_read_session(
 
                     proto_batch = pb.ReadBatch()
                     proto_batch.ParseFromString(message_body)
-                    batch = read_batch_from_proto(proto_batch, ignore_command_records)
+                    batch = read_batch_from_proto(proto_batch)
 
                     if batch.tail is not None:
                         last_tail_at = time.monotonic()
@@ -103,7 +103,16 @@ async def run_read_session(
                         )
                         params["bytes"] = remaining_bytes
 
-                    yield batch
+                    if ignore_command_records:
+                        batch = ReadBatch(
+                            records=[
+                                r for r in batch.records if not r.is_command_record()
+                            ],
+                            tail=batch.tail,
+                        )
+
+                    if batch.records:
+                        yield batch
 
             return
         except Exception as e:
