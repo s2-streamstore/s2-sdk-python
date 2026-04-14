@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.1.2...v0.1.3) (2026-04-14)
+
+
+### Bug Fixes
+
+* incorrect tracking of limits after client-side filtering ([#34](https://github.com/s2-streamstore/s2-sdk-python/issues/34)) ([d69e4f0](https://github.com/s2-streamstore/s2-sdk-python/commit/d69e4f0f7e7dc8ec997bd675b96944577bc3036c))
+
 ## [0.1.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.1.1...v0.1.2) (2026-04-11)
 
 
