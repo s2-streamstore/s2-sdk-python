@@ -72,6 +72,6 @@ jobs:
             "ref": "${{ github.ref }}",
             "lang": "python",
             "uv-version": "0.11.3",
-            "test_cmd": "uv run pytest tests/ -v -s -m '(account or basin or stream) and not cloud_only'"
+            "test_cmd": "uv run pytest tests/ -v -s -m '(account or basin or stream) and not access_tokens'"
           }
         ]

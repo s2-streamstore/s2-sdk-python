@@ -134,7 +134,7 @@ class TestAccountOperations:
         finally:
             await s2.delete_basin(basin_name)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_issue_access_token(self, s2: S2, token_id: str, basin_prefix: str):
         scope = AccessTokenScope(
             basins=PrefixMatch(basin_prefix),
@@ -153,7 +153,7 @@ class TestAccountOperations:
         finally:
             await s2.revoke_access_token(token_id)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_issue_access_token_with_expiry(self, s2: S2, token_id: str):
         expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
@@ -182,7 +182,7 @@ class TestAccountOperations:
         finally:
             await s2.revoke_access_token(token_id)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_issue_access_token_with_auto_prefix(self, s2: S2, token_id: str):
         scope = AccessTokenScope(
             streams=PrefixMatch("prefix/"),
@@ -210,11 +210,11 @@ class TestAccountOperations:
         finally:
             await s2.revoke_access_token(token_id)
 
-    @pytest.mark.cloud_only
     async def test_get_basin_config(self, s2: S2, basin: S2Basin):
         config = await s2.get_basin_config(basin.name)
-        assert config is not None
-        assert config.default_stream_config is not None
+        assert isinstance(config, BasinConfig)
+        assert config.create_stream_on_append is False
+        assert config.create_stream_on_read is False
 
     async def test_delete_nonexistent_basin_errors(self, s2: S2):
         with pytest.raises(S2ServerError):
@@ -241,7 +241,7 @@ class TestAccountOperations:
             for basin_info in basin_infos:
                 await s2.delete_basin(basin_info.name)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_list_access_tokens_with_limit(self, s2: S2, token_id: str):
         scope = AccessTokenScope(
             streams=PrefixMatch(""),
@@ -255,7 +255,7 @@ class TestAccountOperations:
         finally:
             await s2.revoke_access_token(token_id)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_list_access_tokens_with_prefix(self, s2: S2, token_id: str):
         scope = AccessTokenScope(
             streams=PrefixMatch(""),
@@ -270,7 +270,7 @@ class TestAccountOperations:
         finally:
             await s2.revoke_access_token(token_id)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_issue_access_token_with_no_permitted_ops_errors(
         self, s2: S2, token_id: str
     ):
@@ -279,7 +279,7 @@ class TestAccountOperations:
         with pytest.raises(S2ServerError):
             await s2.issue_access_token(id=token_id, scope=scope)
 
-    @pytest.mark.cloud_only
+    @pytest.mark.access_tokens
     async def test_issue_access_token_with_auto_prefix_without_prefix_errors(
         self, s2: S2, token_id: str
     ):
