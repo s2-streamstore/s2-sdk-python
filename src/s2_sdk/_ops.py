@@ -976,7 +976,13 @@ class S2Stream:
 
         proto_batch = pb.ReadBatch()
         proto_batch.ParseFromString(response.content)
-        return read_batch_from_proto(proto_batch, ignore_command_records)
+        batch = read_batch_from_proto(proto_batch)
+        if ignore_command_records:
+            batch = types.ReadBatch(
+                records=[r for r in batch.records if not r.is_command_record()],
+                tail=batch.tail,
+            )
+        return batch
 
     @fallible
     async def read_session(
