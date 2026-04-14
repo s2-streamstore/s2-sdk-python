@@ -2,17 +2,11 @@ name: CI
 
 # NOTE: keep UV_VERSION in sync with uv-version in s2-lite-integration-tests sdks JSON below.
 env:
-  UV_VERSION: "0.11.3"
+  UV_VERSION: "0.11.6"
 
 on:
   pull_request:
-    types:
-      [
-        opened,
-        synchronize,
-        ready_for_review,
-        reopened,
-      ]
+    types: [opened, synchronize, ready_for_review, reopened]
 jobs:
   local-checks:
     name: Local Checks (code quality, unit tests, docs build)
@@ -71,7 +65,7 @@ jobs:
             "repo": "${{ github.repository }}",
             "ref": "${{ github.ref }}",
             "lang": "python",
-            "uv-version": "0.11.3",
+            "uv-version": "0.11.6",
             "test_cmd": "uv run pytest tests/ -v -s -m '(account or basin or stream) and not access_tokens'"
           }
         ]
