@@ -6,6 +6,7 @@ from typing import Any, AsyncIterable
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
+from s2_sdk._encryption import S2_ENCRYPTION_KEY_HEADER, EncryptionKey
 from s2_sdk._exceptions import ReadTimeoutError
 from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
 from s2_sdk._retrier import Attempt, compute_backoffs, http_retry_on
@@ -36,6 +37,7 @@ async def run_read_session(
     wait: int | None,
     ignore_command_records: bool,
     retry: Retry,
+    encryption_key: EncryptionKey | None = None,
 ) -> AsyncIterable[ReadBatch]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     backoffs = compute_backoffs(
@@ -50,6 +52,10 @@ async def run_read_session(
 
     last_tail_at: float | None = None
 
+    headers = {"content-type": "s2s/proto"}
+    if encryption_key is not None:
+        headers[S2_ENCRYPTION_KEY_HEADER] = encryption_key.to_base64()
+
     while True:
         if wait is not None:
             params["wait"] = _remaining_wait(wait, last_tail_at)
@@ -59,7 +65,7 @@ async def run_read_session(
                 "GET",
                 _stream_records_path(stream_name),
                 params=params,
-                headers={"content-type": "s2s/proto"},
+                headers=headers,
             ) as response:
                 if response.status_code != 200:
                     body = await response.aread()

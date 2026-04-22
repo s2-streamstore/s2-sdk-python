@@ -92,6 +92,11 @@
 
 .. autoenum:: AppendRetryPolicy
 
+.. autoenum:: EncryptionAlgorithm
+
+.. autoclass:: EncryptionKey
+    :members:
+
 .. autoenum:: StorageClass
 
 .. autoenum:: TimestampingMode
@@ -158,6 +163,10 @@
     :members:
 
 .. autoclass:: S2ClientError()
+    :members:
+    :show-inheritance:
+
+.. autoclass:: EncryptionKeyLengthError()
     :members:
     :show-inheritance:
 

@@ -38,7 +38,15 @@ def _input(n_records: int = 1, body: bytes = b"payload") -> AppendInput:
     return AppendInput(records=[Record(body=body) for _ in range(n_records)])
 
 
-async def _fake_run(client, stream_name, inputs, retry, compression, ack_timeout=None):
+async def _fake_run(
+    client,
+    stream_name,
+    inputs,
+    retry,
+    compression,
+    ack_timeout=None,
+    encryption_key=None,
+):
     seq = 0
     async for inp in inputs:
         n = len(inp.records)
@@ -47,7 +55,13 @@ async def _fake_run(client, stream_name, inputs, retry, compression, ack_timeout
 
 
 async def _slow_fake_run(
-    client, stream_name, inputs, retry, compression, ack_timeout=None
+    client,
+    stream_name,
+    inputs,
+    retry,
+    compression,
+    ack_timeout=None,
+    encryption_key=None,
 ):
     seq = 0
     async for inp in inputs:
@@ -58,7 +72,13 @@ async def _slow_fake_run(
 
 
 async def _failing_run(
-    client, stream_name, inputs, retry, compression, ack_timeout=None
+    client,
+    stream_name,
+    inputs,
+    retry,
+    compression,
+    ack_timeout=None,
+    encryption_key=None,
 ):
     async for _ in inputs:
         raise RuntimeError("session failed")

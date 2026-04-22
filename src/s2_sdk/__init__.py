@@ -3,6 +3,7 @@ from importlib.metadata import version
 
 from s2_sdk._append_session import AppendSession, BatchSubmitTicket
 from s2_sdk._batching import append_inputs, append_record_batches
+from s2_sdk._encryption import EncryptionKey, EncryptionKeyLengthError
 from s2_sdk._exceptions import (
     AppendConditionError,
     FencingTokenMismatchError,
@@ -29,6 +30,7 @@ from s2_sdk._types import (
     Batching,
     CommandRecord,
     Compression,
+    EncryptionAlgorithm,
     Endpoints,
     ExactMatch,
     Gauge,
@@ -84,6 +86,9 @@ __all__ = [
     "Record",
     "AppendInput",
     "AppendAck",
+    "EncryptionAlgorithm",
+    "EncryptionKey",
+    "EncryptionKeyLengthError",
     "IndexedAppendAck",
     "StreamPosition",
     "SeqNum",

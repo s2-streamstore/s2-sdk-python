@@ -8,6 +8,7 @@ from typing import Self
 from s2_sdk._append_session import AppendSession, BatchSubmitTicket
 from s2_sdk._batching import BatchAccumulator
 from s2_sdk._client import HttpClient
+from s2_sdk._encryption import EncryptionKey
 from s2_sdk._exceptions import S2ClientError
 from s2_sdk._types import (
     AppendAck,
@@ -60,6 +61,7 @@ class Producer:
         match_seq_num: int | None,
         max_unacked_bytes: int,
         batching: Batching,
+        encryption_key: EncryptionKey | None = None,
     ) -> None:
         self._session = AppendSession(
             client=client,
@@ -68,6 +70,7 @@ class Producer:
             compression=compression,
             max_unacked_bytes=max_unacked_bytes,
             max_unacked_batches=None,
+            encryption_key=encryption_key,
         )
         self._fencing_token = fencing_token
         self._match_seq_num = match_seq_num
