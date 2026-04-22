@@ -62,7 +62,9 @@ def _make_stream() -> tuple[S2Stream, MagicMock]:
 
 
 class _StaticStreamResponse:
-    def __init__(self, messages: list[bytes], content: AsyncIterator[bytes] | None) -> None:
+    def __init__(
+        self, messages: list[bytes], content: AsyncIterator[bytes] | None
+    ) -> None:
         self.status_code = 200
         self._messages = messages
         self._content = content
@@ -89,7 +91,9 @@ class _HeaderStreamingClient:
         self.calls: list[dict[str, Any]] = []
         self._response_messages = response_messages
 
-    def streaming_request(self, method: str, path: str, **kwargs) -> _StaticStreamResponse:
+    def streaming_request(
+        self, method: str, path: str, **kwargs
+    ) -> _StaticStreamResponse:
         self.calls.append({"method": method, "path": path, "kwargs": kwargs})
         return _StaticStreamResponse(self._response_messages, kwargs.get("content"))
 

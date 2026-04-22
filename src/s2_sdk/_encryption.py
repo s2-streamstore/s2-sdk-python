@@ -41,10 +41,7 @@ class EncryptionKey:
             encoded = b64encode(raw).decode("ascii")
             key_material_length = len(raw)
 
-        if (
-            len(encoded) == 0
-            or len(encoded) > MAX_ENCRYPTION_KEY_HEADER_VALUE_LEN
-        ):
+        if len(encoded) == 0 or len(encoded) > MAX_ENCRYPTION_KEY_HEADER_VALUE_LEN:
             raise EncryptionKeyLengthError(key_material_length)
 
         self._encoded = encoded
