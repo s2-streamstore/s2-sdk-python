@@ -54,7 +54,7 @@ class AppendRetryPolicy(_DocEnum):
 
 
 class EncryptionAlgorithm(_DocEnum):
-    """Encryption algorithm for basin-level default stream encryption."""
+    """Encryption algorithm."""
 
     AEGIS_256 = "aegis-256", "AEGIS-256."
     AES_256_GCM = "aes-256-gcm", "AES-256-GCM."
@@ -64,7 +64,7 @@ BytesLike: TypeAlias = bytes | bytearray | memoryview
 
 
 class EncryptionKey:
-    """Base64-encoded encryption key material for append/read operations.
+    """Encryption key material for append/read operations.
 
     Args:
         key: Base64-encoded key material as ``str``, or raw bytes-like key
@@ -536,7 +536,7 @@ class BasinConfig:
     """Default configuration for streams in this basin."""
 
     stream_cipher: EncryptionAlgorithm | None = None
-    """Encryption algorithm to apply to newly created streams in this basin."""
+    """Encryption algorithm to apply to newly created streams in the basin."""
 
     create_stream_on_append: bool | None = None
     """Create stream on append if it doesn't exist."""
