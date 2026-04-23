@@ -1,3 +1,4 @@
+import base64
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -35,7 +36,6 @@ from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
     ONE_MIB,
     Compression,
-    EncryptionKey,
     Endpoints,
     Retry,
     Timeout,
@@ -45,6 +45,7 @@ from s2_sdk._validators import (
     validate_append_input,
     validate_basin,
     validate_batching,
+    validate_encryption_key,
     validate_max_unacked,
     validate_retry,
 )
@@ -621,14 +622,15 @@ class S2Basin:
         self,
         name: str,
         *,
-        encryption_key: EncryptionKey | None = None,
+        encryption_key: bytes | str | None = None,
     ) -> "S2Stream":
         """Get an :class:`S2Stream` for performing stream-level operations.
 
         Args:
             name: Name of the stream.
-            encryption_key: Client-supplied encryption key for append/read
-                operations on this stream.
+            encryption_key: Encryption key material for append/read operations.
+                If `bytes`, it will get converted to a base64 encoded `str`.
+                If `str`, it must be base64 encoded.
 
         Returns:
             An :class:`S2Stream` bound to the given stream name.
@@ -636,6 +638,11 @@ class S2Basin:
         Tip:
             Also available via subscript: ``s2["my-basin"]["my-stream"]``.
         """
+        if isinstance(encryption_key, str):
+            validate_encryption_key(encryption_key)
+        elif isinstance(encryption_key, bytes):
+            encryption_key = base64.b64encode(encryption_key).decode()
+
         return S2Stream(
             name,
             self._client,
@@ -787,7 +794,7 @@ class S2Stream:
         *,
         retry: Retry,
         compression: Compression,
-        encryption_key: EncryptionKey | None = None,
+        encryption_key: str | None = None,
     ) -> None:
         self._name = name
         self._client = client
@@ -823,7 +830,7 @@ class S2Stream:
         if self._encryption_key is None:
             return headers
         merged = dict(headers or {})
-        merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key._to_base64()
+        merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key
         return merged
 
     @fallible

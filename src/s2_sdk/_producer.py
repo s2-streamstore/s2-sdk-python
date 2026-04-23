@@ -14,7 +14,6 @@ from s2_sdk._types import (
     AppendInput,
     Batching,
     Compression,
-    EncryptionKey,
     IndexedAppendAck,
     Record,
     Retry,
@@ -61,7 +60,7 @@ class Producer:
         match_seq_num: int | None,
         max_unacked_bytes: int,
         batching: Batching,
-        encryption_key: EncryptionKey | None = None,
+        encryption_key: str | None = None,
     ) -> None:
         self._session = AppendSession(
             client=client,

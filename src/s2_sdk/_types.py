@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import os
-from base64 import b64encode
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Generic, Iterable, Literal, TypeAlias, TypeVar
+from typing import Generic, Iterable, Literal, TypeVar
 
 from s2_sdk._exceptions import S2ClientError, fallible
 
@@ -13,7 +12,6 @@ T = TypeVar("T")
 
 ONE_MIB = 1024 * 1024
 _S2_ENCRYPTION_KEY_HEADER = "s2-encryption-key"
-_MAX_ENCRYPTION_KEY_HEADER_VALUE_LEN = 44
 
 
 def _parse_scheme(url: str) -> str:
@@ -58,52 +56,6 @@ class EncryptionAlgorithm(_DocEnum):
 
     AEGIS_256 = "aegis-256", "AEGIS-256."
     AES_256_GCM = "aes-256-gcm", "AES-256-GCM."
-
-
-BytesLike: TypeAlias = bytes | bytearray | memoryview
-
-
-class EncryptionKey:
-    """Encryption key material for append/read operations.
-
-    Args:
-        key: Base64-encoded key material as ``str``, or raw bytes-like key
-            material which will be base64-encoded automatically.
-    """
-
-    __slots__ = ("_encoded",)
-
-    def __init__(self, key: str | BytesLike):
-        if isinstance(key, str):
-            encoded = key.strip()
-            key_material_length = len(encoded)
-        else:
-            raw = bytes(key)
-            encoded = b64encode(raw).decode("ascii")
-            key_material_length = len(raw)
-
-        if len(encoded) == 0 or len(encoded) > _MAX_ENCRYPTION_KEY_HEADER_VALUE_LEN:
-            raise S2ClientError(
-                f"invalid encryption key: key material length {key_material_length} is out of range"
-            )
-
-        self._encoded = encoded
-
-    def _to_base64(self) -> str:
-        return self._encoded
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EncryptionKey):
-            return NotImplemented
-        return self._encoded == other._encoded
-
-    def __hash__(self) -> int:
-        return hash(self._encoded)
-
-    def __repr__(self) -> str:
-        return "EncryptionKey(<redacted>)"
-
-    __str__ = __repr__
 
 
 class Endpoints:

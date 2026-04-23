@@ -13,7 +13,6 @@ from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
-    EncryptionKey,
     ReadBatch,
     ReadLimit,
     Retry,
@@ -38,7 +37,7 @@ async def run_read_session(
     wait: int | None,
     ignore_command_records: bool,
     retry: Retry,
-    encryption_key: EncryptionKey | None = None,
+    encryption_key: str | None = None,
 ) -> AsyncIterable[ReadBatch]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     backoffs = compute_backoffs(
@@ -55,7 +54,7 @@ async def run_read_session(
 
     headers = {"content-type": "s2s/proto"}
     if encryption_key is not None:
-        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key._to_base64()
+        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
 
     while True:
         if wait is not None:

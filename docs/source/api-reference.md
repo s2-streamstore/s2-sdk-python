@@ -94,9 +94,6 @@
 
 .. autoenum:: EncryptionAlgorithm
 
-.. autoclass:: EncryptionKey
-    :members:
-
 .. autoenum:: StorageClass
 
 .. autoenum:: TimestampingMode

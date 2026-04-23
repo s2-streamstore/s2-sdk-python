@@ -11,7 +11,6 @@ from s2_sdk._types import (
     AppendAck,
     AppendInput,
     Compression,
-    EncryptionKey,
     Retry,
     metered_bytes,
 )
@@ -55,7 +54,7 @@ class AppendSession:
         compression: Compression,
         max_unacked_bytes: int,
         max_unacked_batches: int | None,
-        encryption_key: EncryptionKey | None = None,
+        encryption_key: str | None = None,
     ) -> None:
         self._client = client
         self._stream_name = stream_name
