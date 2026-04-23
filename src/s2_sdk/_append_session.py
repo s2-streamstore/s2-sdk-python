@@ -5,13 +5,13 @@ from collections import deque
 from typing import AsyncIterable, NamedTuple, Self
 
 from s2_sdk._client import HttpClient
-from s2_sdk._encryption import EncryptionKey
 from s2_sdk._exceptions import S2ClientError
 from s2_sdk._s2s._append_session import run_append_session
 from s2_sdk._types import (
     AppendAck,
     AppendInput,
     Compression,
+    EncryptionKey,
     Retry,
     metered_bytes,
 )

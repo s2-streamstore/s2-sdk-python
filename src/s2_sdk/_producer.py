@@ -8,13 +8,13 @@ from typing import Self
 from s2_sdk._append_session import AppendSession, BatchSubmitTicket
 from s2_sdk._batching import BatchAccumulator
 from s2_sdk._client import HttpClient
-from s2_sdk._encryption import EncryptionKey
 from s2_sdk._exceptions import S2ClientError
 from s2_sdk._types import (
     AppendAck,
     AppendInput,
     Batching,
     Compression,
+    EncryptionKey,
     IndexedAppendAck,
     Record,
     Retry,

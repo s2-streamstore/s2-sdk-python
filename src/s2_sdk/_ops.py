@@ -8,12 +8,6 @@ import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk import _types as types
 from s2_sdk._append_session import AppendSession
 from s2_sdk._client import ConnectionPool, HttpClient
-from s2_sdk._encryption import (
-    S2_ENCRYPTION_KEY_HEADER,
-    EncryptionKey,
-    EncryptionKeyInput,
-    resolve_encryption_key,
-)
 from s2_sdk._exceptions import S2ServerError, fallible
 from s2_sdk._mappers import (
     access_token_info_from_json,
@@ -37,7 +31,16 @@ from s2_sdk._mappers import (
 from s2_sdk._producer import Producer
 from s2_sdk._retrier import Retrier, http_retry_on, is_safe_to_retry_unary
 from s2_sdk._s2s._read_session import run_read_session
-from s2_sdk._types import ONE_MIB, Compression, Endpoints, Retry, Timeout, metered_bytes
+from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
+    ONE_MIB,
+    Compression,
+    EncryptionKey,
+    Endpoints,
+    Retry,
+    Timeout,
+    metered_bytes,
+)
 from s2_sdk._validators import (
     validate_append_input,
     validate_basin,
@@ -618,15 +621,14 @@ class S2Basin:
         self,
         name: str,
         *,
-        encryption_key: EncryptionKeyInput | None = None,
+        encryption_key: EncryptionKey | None = None,
     ) -> "S2Stream":
         """Get an :class:`S2Stream` for performing stream-level operations.
 
         Args:
             name: Name of the stream.
             encryption_key: Client-supplied encryption key for append/read
-                operations on this stream. Accepts either base64-encoded key
-                material or raw bytes.
+                operations on this stream.
 
         Returns:
             An :class:`S2Stream` bound to the given stream name.
@@ -639,7 +641,7 @@ class S2Basin:
             self._client,
             retry=self._retry,
             compression=self._compression,
-            encryption_key=resolve_encryption_key(encryption_key),
+            encryption_key=encryption_key,
         )
 
     @fallible
@@ -821,18 +823,8 @@ class S2Stream:
         if self._encryption_key is None:
             return headers
         merged = dict(headers or {})
-        merged[S2_ENCRYPTION_KEY_HEADER] = self._encryption_key.to_base64()
+        merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key._to_base64()
         return merged
-
-    def with_encryption_key(self, encryption_key: EncryptionKeyInput) -> "S2Stream":
-        """Set the encryption key for this stream handle."""
-        return S2Stream(
-            self.name,
-            self._client,
-            retry=self._retry,
-            compression=self._compression,
-            encryption_key=resolve_encryption_key(encryption_key),
-        )
 
     @fallible
     async def check_tail(self) -> types.StreamPosition:

@@ -6,13 +6,14 @@ from typing import Any, AsyncIterable
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
-from s2_sdk._encryption import S2_ENCRYPTION_KEY_HEADER, EncryptionKey
 from s2_sdk._exceptions import ReadTimeoutError
 from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
 from s2_sdk._retrier import Attempt, compute_backoffs, http_retry_on
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
+    EncryptionKey,
     ReadBatch,
     ReadLimit,
     Retry,
@@ -54,7 +55,7 @@ async def run_read_session(
 
     headers = {"content-type": "s2s/proto"}
     if encryption_key is not None:
-        headers[S2_ENCRYPTION_KEY_HEADER] = encryption_key.to_base64()
+        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key._to_base64()
 
     while True:
         if wait is not None:

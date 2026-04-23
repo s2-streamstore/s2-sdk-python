@@ -6,7 +6,6 @@ from typing import NamedTuple
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
-from s2_sdk._encryption import S2_ENCRYPTION_KEY_HEADER, EncryptionKey
 from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._mappers import append_ack_from_proto, append_input_to_proto
@@ -20,10 +19,12 @@ from s2_sdk._s2s._protocol import (
     read_messages,
 )
 from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
     AppendAck,
     AppendInput,
     AppendRetryPolicy,
     Compression,
+    EncryptionKey,
     Retry,
 )
 
@@ -145,7 +146,7 @@ async def _run_attempt(
         "accept": "s2s/proto",
     }
     if encryption_key is not None:
-        headers[S2_ENCRYPTION_KEY_HEADER] = encryption_key.to_base64()
+        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key._to_base64()
 
     async with client.streaming_request(
         "POST",

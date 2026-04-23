@@ -11,12 +11,11 @@ from s2_sdk import (
     Compression,
     EncryptionAlgorithm,
     EncryptionKey,
-    EncryptionKeyLengthError,
     ReadLimit,
     Record,
     Retry,
     S2Basin,
-    S2Stream,
+    S2ClientError,
     SeqNum,
 )
 from s2_sdk._client import HttpClient, Response
@@ -47,18 +46,6 @@ def _read_batch_response() -> Response:
         tail=pb.StreamPosition(seq_num=1, timestamp=10),
     )
     return Response(200, batch.SerializeToString())
-
-
-def _make_stream() -> tuple[S2Stream, MagicMock]:
-    client = MagicMock()
-    client.unary_request = AsyncMock()
-    stream = S2Stream(
-        "events",
-        client,
-        retry=Retry(max_attempts=1),
-        compression=Compression.NONE,
-    )
-    return stream, client
 
 
 class _StaticStreamResponse:
@@ -114,18 +101,16 @@ async def _append_inputs() -> AsyncIterator[AppendInput]:
 
 
 def test_encryption_key_normalizes_string_and_bytes():
-    assert EncryptionKey(f"  {KEY_B64}\n").to_base64() == KEY_B64
-    assert EncryptionKey(KEY_BYTES).to_base64() == KEY_B64
+    assert EncryptionKey(f"  {KEY_B64}\n") == EncryptionKey(KEY_B64)
+    assert EncryptionKey(KEY_BYTES) == EncryptionKey(KEY_B64)
 
 
-def test_encryption_key_length_error_reports_original_input_length():
-    with pytest.raises(EncryptionKeyLengthError) as exc_info:
+def test_encryption_key_raises_client_error_for_invalid_length():
+    with pytest.raises(S2ClientError, match="length 0 is out of range"):
         EncryptionKey("   ")
-    assert exc_info.value.length == 0
 
-    with pytest.raises(EncryptionKeyLengthError) as exc_info:
+    with pytest.raises(S2ClientError, match="length 34 is out of range"):
         EncryptionKey(bytes(range(34)))
-    assert exc_info.value.length == 34
 
 
 def test_basin_config_maps_stream_cipher():
@@ -162,7 +147,7 @@ async def test_basin_stream_injects_unary_encryption_header():
         compression=Compression.NONE,
     )
 
-    stream = basin.stream("events", encryption_key=KEY_BYTES)
+    stream = basin.stream("events", encryption_key=EncryptionKey(KEY_BYTES))
     await stream.append(AppendInput(records=[Record(body=b"payload")]))
     await stream.read(start=SeqNum(0), limit=ReadLimit(count=1))
 
@@ -173,8 +158,14 @@ async def test_basin_stream_injects_unary_encryption_header():
 
 
 def test_stream_append_session_and_producer_propagate_encryption_key():
-    stream, _ = _make_stream()
-    encrypted_stream = stream.with_encryption_key(KEY_BYTES)
+    client = MagicMock()
+    basin = S2Basin(
+        "test-basin",
+        client,
+        retry=Retry(max_attempts=1),
+        compression=Compression.NONE,
+    )
+    encrypted_stream = basin.stream("events", encryption_key=EncryptionKey(KEY_BYTES))
 
     with patch("s2_sdk._ops.AppendSession") as append_session:
         encrypted_stream.append_session()
@@ -187,8 +178,14 @@ def test_stream_append_session_and_producer_propagate_encryption_key():
 
 @pytest.mark.asyncio
 async def test_stream_read_session_propagates_encryption_key():
-    stream, _ = _make_stream()
-    encrypted_stream = stream.with_encryption_key(KEY_BYTES)
+    client = MagicMock()
+    basin = S2Basin(
+        "test-basin",
+        client,
+        retry=Retry(max_attempts=1),
+        compression=Compression.NONE,
+    )
+    encrypted_stream = basin.stream("events", encryption_key=EncryptionKey(KEY_BYTES))
     calls: list[dict[str, Any]] = []
 
     async def _fake_run_read_session(*args, **kwargs):

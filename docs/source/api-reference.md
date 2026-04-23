@@ -166,10 +166,6 @@
     :members:
     :show-inheritance:
 
-.. autoclass:: EncryptionKeyLengthError()
-    :members:
-    :show-inheritance:
-
 .. autoclass:: S2ServerError()
     :members:
     :show-inheritance:
