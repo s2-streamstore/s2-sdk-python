@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.1.3...v0.2.0) (2026-04-23)
+
+
+### Features
+
+* encryption support ([#37](https://github.com/s2-streamstore/s2-sdk-python/issues/37)) ([2106eda](https://github.com/s2-streamstore/s2-sdk-python/commit/2106eda2f4ba531584f6e66f1b703aa4d519a7b7))
+
 ## [0.1.3](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.1.2...v0.1.3) (2026-04-14)
 
 
