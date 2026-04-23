@@ -628,9 +628,12 @@ class S2Basin:
 
         Args:
             name: Name of the stream.
-            encryption_key: Encryption key material for append/read operations.
-                If `bytes`, it will get converted to a base64 encoded `str`.
-                If `str`, it must be base64 encoded.
+            encryption_key: Key for encrypting records on append and decrypting
+                them on read. Required when encryption is enabled via
+                :attr:`BasinConfig.stream_cipher` (see :class:`Encryption`
+                for supported algorithms).
+                If ``bytes``, it will get converted to a base64 encoded str.
+                If ``str``, it must be base64 encoded.
 
         Returns:
             An :class:`S2Stream` bound to the given stream name.

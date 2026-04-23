@@ -51,7 +51,7 @@ class AppendRetryPolicy(_DocEnum):
     )
 
 
-class EncryptionAlgorithm(_DocEnum):
+class Encryption(_DocEnum):
     """Encryption algorithm."""
 
     AEGIS_256 = "aegis-256", "AEGIS-256."
@@ -487,7 +487,7 @@ class BasinConfig:
     default_stream_config: StreamConfig | None = None
     """Default configuration for streams in this basin."""
 
-    stream_cipher: EncryptionAlgorithm | None = None
+    stream_cipher: Encryption | None = None
     """Encryption algorithm to apply to newly created streams in the basin."""
 
     create_stream_on_append: bool | None = None
@@ -527,7 +527,7 @@ class StreamInfo:
     deleted_at: datetime | None
     """Deletion time if the stream is being deleted."""
 
-    cipher: EncryptionAlgorithm | None = None
+    cipher: Encryption | None = None
     """Encryption algorithm for this stream, if encryption is enabled."""
 
 

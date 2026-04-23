@@ -92,7 +92,7 @@
 
 .. autoenum:: AppendRetryPolicy
 
-.. autoenum:: EncryptionAlgorithm
+.. autoenum:: Encryption
 
 .. autoenum:: StorageClass
 

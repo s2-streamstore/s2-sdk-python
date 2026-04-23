@@ -11,7 +11,7 @@ from s2_sdk._types import (
     BasinConfig,
     BasinInfo,
     BasinScope,
-    EncryptionAlgorithm,
+    Encryption,
     ExactMatch,
     Gauge,
     Label,
@@ -62,7 +62,7 @@ def basin_config_from_json(data: dict[str, Any]) -> BasinConfig:
     stream_cipher = data.get("stream_cipher")
     return BasinConfig(
         default_stream_config=stream_config_from_json(dsc) if dsc else None,
-        stream_cipher=EncryptionAlgorithm(stream_cipher) if stream_cipher else None,
+        stream_cipher=Encryption(stream_cipher) if stream_cipher else None,
         create_stream_on_append=data.get("create_stream_on_append"),
         create_stream_on_read=data.get("create_stream_on_read"),
     )
@@ -156,7 +156,7 @@ def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
         name=data["name"],
         created_at=created_at,
         deleted_at=deleted_at,
-        cipher=EncryptionAlgorithm(cipher) if cipher else None,
+        cipher=Encryption(cipher) if cipher else None,
     )
 
 

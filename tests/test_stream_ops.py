@@ -14,7 +14,7 @@ from s2_sdk import (
     Batching,
     CommandRecord,
     Compression,
-    EncryptionAlgorithm,
+    Encryption,
     Endpoints,
     FencingTokenMismatchError,
     ReadLimit,
@@ -857,7 +857,7 @@ def _make_key(key_type: str) -> bytes | str:
 @pytest.mark.stream
 @pytest.mark.parametrize(
     "cipher",
-    [EncryptionAlgorithm.AEGIS_256, EncryptionAlgorithm.AES_256_GCM],
+    [Encryption.AEGIS_256, Encryption.AES_256_GCM],
 )
 class TestEncryption:
     @pytest.mark.parametrize("key_type", ["bytes", "str"])
@@ -865,27 +865,19 @@ class TestEncryption:
         self,
         access_token: str,
         endpoints: Endpoints | None,
-        cipher: EncryptionAlgorithm,
+        cipher: Encryption,
         key_type: str,
     ):
         async with S2(access_token, endpoints=endpoints) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
             await s2.create_basin(
                 name=basin_name,
-                config=BasinConfig(
-                    stream_cipher=cipher,
-                    default_stream_config=StreamConfig(
-                        storage_class=StorageClass.STANDARD
-                    ),
-                ),
+                config=BasinConfig(stream_cipher=cipher),
             )
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                info = await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(timestamping=Timestamping(uncapped=True)),
-                )
+                info = await basin.create_stream(stream_name)
                 assert info.cipher == cipher
 
                 key = _make_key(key_type)
@@ -916,27 +908,19 @@ class TestEncryption:
         self,
         access_token: str,
         endpoints: Endpoints | None,
-        cipher: EncryptionAlgorithm,
+        cipher: Encryption,
         key_type: str,
     ):
         async with S2(access_token, endpoints=endpoints) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
             await s2.create_basin(
                 name=basin_name,
-                config=BasinConfig(
-                    stream_cipher=cipher,
-                    default_stream_config=StreamConfig(
-                        timestamping=Timestamping(mode=TimestampingMode.ARRIVAL)
-                    ),
-                ),
+                config=BasinConfig(stream_cipher=cipher),
             )
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                info = await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(storage_class=StorageClass.STANDARD),
-                )
+                info = await basin.create_stream(stream_name)
                 assert info.cipher == cipher
 
                 key = _make_key(key_type)
@@ -963,26 +947,18 @@ class TestEncryption:
         self,
         access_token: str,
         endpoints: Endpoints | None,
-        cipher: EncryptionAlgorithm,
+        cipher: Encryption,
     ):
         async with S2(access_token, endpoints=endpoints) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
             await s2.create_basin(
                 name=basin_name,
-                config=BasinConfig(
-                    stream_cipher=cipher,
-                    default_stream_config=StreamConfig(
-                        storage_class=StorageClass.STANDARD
-                    ),
-                ),
+                config=BasinConfig(stream_cipher=cipher),
             )
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(timestamping=Timestamping(uncapped=True)),
-                )
+                await basin.create_stream(stream_name)
                 try:
                     stream = basin.stream(stream_name)
                     with pytest.raises(S2ServerError) as append_exc:
@@ -1004,26 +980,18 @@ class TestEncryption:
         self,
         access_token: str,
         endpoints: Endpoints | None,
-        cipher: EncryptionAlgorithm,
+        cipher: Encryption,
     ):
         async with S2(access_token, endpoints=endpoints) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
             await s2.create_basin(
                 name=basin_name,
-                config=BasinConfig(
-                    stream_cipher=cipher,
-                    default_stream_config=StreamConfig(
-                        storage_class=StorageClass.STANDARD
-                    ),
-                ),
+                config=BasinConfig(stream_cipher=cipher),
             )
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(timestamping=Timestamping(uncapped=True)),
-                )
+                await basin.create_stream(stream_name)
                 try:
                     key_a = os.urandom(32)
                     key_b = os.urandom(32)
