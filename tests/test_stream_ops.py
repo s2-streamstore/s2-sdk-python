@@ -25,7 +25,6 @@ from s2_sdk import (
     S2Stream,
     SeqNum,
     SeqNumMismatchError,
-    StorageClass,
     StreamConfig,
     TailOffset,
     Timestamp,
@@ -766,28 +765,18 @@ class TestStreamOperations:
 
 
 @pytest.mark.stream
-@pytest.mark.parametrize("compression", [Compression.GZIP])
+@pytest.mark.parametrize("compression", [Compression.GZIP, Compression.ZSTD])
 class TestCompression:
     async def test_compression_roundtrip_unary(
         self, access_token: str, endpoints: Endpoints | None, compression: Compression
     ):
         async with S2(access_token, endpoints=endpoints, compression=compression) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
-            await s2.create_basin(
-                name=basin_name,
-                config=BasinConfig(
-                    default_stream_config=StreamConfig(
-                        storage_class=StorageClass.STANDARD
-                    )
-                ),
-            )
+            await s2.create_basin(basin_name)
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(timestamping=Timestamping(uncapped=True)),
-                )
+                await basin.create_stream(stream_name)
                 try:
                     stream = basin.stream(stream_name)
                     ack = await stream.append(
@@ -813,21 +802,11 @@ class TestCompression:
     ):
         async with S2(access_token, endpoints=endpoints, compression=compression) as s2:
             basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
-            await s2.create_basin(
-                name=basin_name,
-                config=BasinConfig(
-                    default_stream_config=StreamConfig(
-                        timestamping=Timestamping(mode=TimestampingMode.ARRIVAL)
-                    )
-                ),
-            )
+            await s2.create_basin(basin_name)
             try:
                 basin = s2.basin(basin_name)
                 stream_name = f"stream-{uuid.uuid4().hex[:8]}"
-                await basin.create_stream(
-                    name=stream_name,
-                    config=StreamConfig(storage_class=StorageClass.STANDARD),
-                )
+                await basin.create_stream(stream_name)
                 try:
                     stream = basin.stream(stream_name)
                     # Payload >= 1KiB to trigger compression
