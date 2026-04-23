@@ -1,3 +1,4 @@
+import base64
 import re
 
 from s2_sdk._exceptions import S2ClientError
@@ -51,3 +52,10 @@ def validate_append_input(num_records: int, num_bytes: int) -> None:
     raise S2ClientError(
         f"Invalid append input: num_records={num_records}, metered_bytes={num_bytes}"
     )
+
+
+def validate_encryption_key(key: str) -> None:
+    try:
+        base64.b64decode(key, validate=True)
+    except Exception:
+        raise S2ClientError("encryption_key must be a base64 encoded str")

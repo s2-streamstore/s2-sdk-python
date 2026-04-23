@@ -92,6 +92,8 @@
 
 .. autoenum:: AppendRetryPolicy
 
+.. autoenum:: Encryption
+
 .. autoenum:: StorageClass
 
 .. autoenum:: TimestampingMode

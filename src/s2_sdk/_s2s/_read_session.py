@@ -12,6 +12,7 @@ from s2_sdk._retrier import Attempt, compute_backoffs, http_retry_on
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
     ReadBatch,
     ReadLimit,
     Retry,
@@ -36,6 +37,7 @@ async def run_read_session(
     wait: int | None,
     ignore_command_records: bool,
     retry: Retry,
+    encryption_key: str | None = None,
 ) -> AsyncIterable[ReadBatch]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     backoffs = compute_backoffs(
@@ -50,6 +52,10 @@ async def run_read_session(
 
     last_tail_at: float | None = None
 
+    headers = {"content-type": "s2s/proto"}
+    if encryption_key is not None:
+        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
+
     while True:
         if wait is not None:
             params["wait"] = _remaining_wait(wait, last_tail_at)
@@ -59,7 +65,7 @@ async def run_read_session(
                 "GET",
                 _stream_records_path(stream_name),
                 params=params,
-                headers={"content-type": "s2s/proto"},
+                headers=headers,
             ) as response:
                 if response.status_code != 200:
                     body = await response.aread()

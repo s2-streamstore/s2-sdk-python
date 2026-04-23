@@ -11,6 +11,7 @@ from s2_sdk._types import (
     BasinConfig,
     BasinInfo,
     BasinScope,
+    Encryption,
     ExactMatch,
     Gauge,
     Label,
@@ -47,6 +48,8 @@ def basin_config_to_json(config: BasinConfig | None) -> dict[str, Any] | None:
         result["default_stream_config"] = stream_config_to_json(
             config.default_stream_config
         )
+    if config.stream_cipher is not None:
+        result["stream_cipher"] = config.stream_cipher.value
     if config.create_stream_on_append is not None:
         result["create_stream_on_append"] = config.create_stream_on_append
     if config.create_stream_on_read is not None:
@@ -56,8 +59,10 @@ def basin_config_to_json(config: BasinConfig | None) -> dict[str, Any] | None:
 
 def basin_config_from_json(data: dict[str, Any]) -> BasinConfig:
     dsc = data.get("default_stream_config")
+    stream_cipher = data.get("stream_cipher")
     return BasinConfig(
         default_stream_config=stream_config_from_json(dsc) if dsc else None,
+        stream_cipher=Encryption(stream_cipher) if stream_cipher else None,
         create_stream_on_append=data.get("create_stream_on_append"),
         create_stream_on_read=data.get("create_stream_on_read"),
     )
@@ -146,10 +151,12 @@ def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
     created_at = datetime.fromisoformat(data["created_at"])
     deleted_at_str = data.get("deleted_at")
     deleted_at = datetime.fromisoformat(deleted_at_str) if deleted_at_str else None
+    cipher = data.get("cipher")
     return StreamInfo(
         name=data["name"],
         created_at=created_at,
         deleted_at=deleted_at,
+        cipher=Encryption(cipher) if cipher else None,
     )
 
 

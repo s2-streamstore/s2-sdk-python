@@ -37,6 +37,7 @@ class AppendSession:
         "_client",
         "_compression",
         "_error",
+        "_encryption_key",
         "_permits",
         "_queue",
         "_retry",
@@ -53,11 +54,13 @@ class AppendSession:
         compression: Compression,
         max_unacked_bytes: int,
         max_unacked_batches: int | None,
+        encryption_key: str | None = None,
     ) -> None:
         self._client = client
         self._stream_name = stream_name
         self._retry = retry
         self._compression = compression
+        self._encryption_key = encryption_key
         self._permits = _AppendPermits(max_unacked_bytes, max_unacked_batches)
 
         self._queue: asyncio.Queue[AppendInput | None] = asyncio.Queue()
@@ -121,6 +124,7 @@ class AppendSession:
                 retry=self._retry,
                 compression=self._compression,
                 ack_timeout=self._client._request_timeout,
+                encryption_key=self._encryption_key,
             ):
                 self._resolve_next(ack)
         except BaseException as e:

@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import os
 import time
 import uuid
 from datetime import timedelta
@@ -12,6 +14,7 @@ from s2_sdk import (
     Batching,
     CommandRecord,
     Compression,
+    Encryption,
     Endpoints,
     FencingTokenMismatchError,
     ReadLimit,
@@ -840,6 +843,167 @@ class TestCompression:
                     batch = await stream.read(start=SeqNum(0))
                     assert len(batch.records) == 1
                     assert len(batch.records[0].body) == 20480
+                finally:
+                    await basin.delete_stream(stream_name)
+            finally:
+                await s2.delete_basin(basin_name)
+
+
+def _make_key(key_type: str) -> bytes | str:
+    raw = os.urandom(32)
+    return raw if key_type == "bytes" else base64.b64encode(raw).decode()
+
+
+@pytest.mark.stream
+@pytest.mark.parametrize(
+    "cipher",
+    [Encryption.AEGIS_256, Encryption.AES_256_GCM],
+)
+class TestEncryption:
+    @pytest.mark.parametrize("key_type", ["bytes", "str"])
+    async def test_encryption_roundtrip_unary(
+        self,
+        access_token: str,
+        endpoints: Endpoints | None,
+        cipher: Encryption,
+        key_type: str,
+    ):
+        async with S2(access_token, endpoints=endpoints) as s2:
+            basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
+            await s2.create_basin(
+                name=basin_name,
+                config=BasinConfig(stream_cipher=cipher),
+            )
+            try:
+                basin = s2.basin(basin_name)
+                stream_name = f"stream-{uuid.uuid4().hex[:8]}"
+                info = await basin.create_stream(stream_name)
+                assert info.cipher == cipher
+
+                key = _make_key(key_type)
+                try:
+                    stream = basin.stream(stream_name, encryption_key=key)
+                    ack = await stream.append(
+                        AppendInput(
+                            records=[
+                                Record(body=b"hello"),
+                                Record(body=b"world"),
+                            ]
+                        )
+                    )
+                    assert ack.start.seq_num == 0
+                    assert ack.end.seq_num == 2
+
+                    batch = await stream.read(start=SeqNum(0))
+                    assert len(batch.records) == 2
+                    assert batch.records[0].body == b"hello"
+                    assert batch.records[1].body == b"world"
+                finally:
+                    await basin.delete_stream(stream_name)
+            finally:
+                await s2.delete_basin(basin_name)
+
+    @pytest.mark.parametrize("key_type", ["bytes", "str"])
+    async def test_encryption_roundtrip_session(
+        self,
+        access_token: str,
+        endpoints: Endpoints | None,
+        cipher: Encryption,
+        key_type: str,
+    ):
+        async with S2(access_token, endpoints=endpoints) as s2:
+            basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
+            await s2.create_basin(
+                name=basin_name,
+                config=BasinConfig(stream_cipher=cipher),
+            )
+            try:
+                basin = s2.basin(basin_name)
+                stream_name = f"stream-{uuid.uuid4().hex[:8]}"
+                info = await basin.create_stream(stream_name)
+                assert info.cipher == cipher
+
+                key = _make_key(key_type)
+                try:
+                    stream = basin.stream(stream_name, encryption_key=key)
+                    async with stream.append_session() as session:
+                        ticket = await session.submit(
+                            AppendInput(records=[Record(body=b"s2" * 10240)])
+                        )
+                        ack = await ticket
+
+                    assert ack.start.seq_num == 0
+                    assert ack.end.seq_num == 1
+
+                    batch = await stream.read(start=SeqNum(0))
+                    assert len(batch.records) == 1
+                    assert batch.records[0].body == b"s2" * 10240
+                finally:
+                    await basin.delete_stream(stream_name)
+            finally:
+                await s2.delete_basin(basin_name)
+
+    async def test_encrypted_stream_requires_key(
+        self,
+        access_token: str,
+        endpoints: Endpoints | None,
+        cipher: Encryption,
+    ):
+        async with S2(access_token, endpoints=endpoints) as s2:
+            basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
+            await s2.create_basin(
+                name=basin_name,
+                config=BasinConfig(stream_cipher=cipher),
+            )
+            try:
+                basin = s2.basin(basin_name)
+                stream_name = f"stream-{uuid.uuid4().hex[:8]}"
+                await basin.create_stream(stream_name)
+                try:
+                    stream = basin.stream(stream_name)
+                    with pytest.raises(S2ServerError) as append_exc:
+                        await stream.append(
+                            AppendInput(records=[Record(body=b"hello")])
+                        )
+                    assert append_exc.value.code == "invalid"
+                    assert cipher.value in str(append_exc.value)
+                    with pytest.raises(S2ServerError) as read_exc:
+                        await stream.read(start=SeqNum(0))
+                    assert read_exc.value.code == "invalid"
+                    assert cipher.value in str(read_exc.value)
+                finally:
+                    await basin.delete_stream(stream_name)
+            finally:
+                await s2.delete_basin(basin_name)
+
+    async def test_encrypted_stream_wrong_key_read_fails(
+        self,
+        access_token: str,
+        endpoints: Endpoints | None,
+        cipher: Encryption,
+    ):
+        async with S2(access_token, endpoints=endpoints) as s2:
+            basin_name = f"test-py-sdk-{uuid.uuid4().hex[:8]}"
+            await s2.create_basin(
+                name=basin_name,
+                config=BasinConfig(stream_cipher=cipher),
+            )
+            try:
+                basin = s2.basin(basin_name)
+                stream_name = f"stream-{uuid.uuid4().hex[:8]}"
+                await basin.create_stream(stream_name)
+                try:
+                    key_a = os.urandom(32)
+                    key_b = os.urandom(32)
+
+                    writer = basin.stream(stream_name, encryption_key=key_a)
+                    reader = basin.stream(stream_name, encryption_key=key_b)
+
+                    await writer.append(AppendInput(records=[Record(body=b"secret")]))
+
+                    with pytest.raises(S2ServerError) as exc_info:
+                        await reader.read(start=SeqNum(0))
+                    assert exc_info.value.code == "decryption_failed"
                 finally:
                     await basin.delete_stream(stream_name)
             finally:

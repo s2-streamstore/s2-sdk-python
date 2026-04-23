@@ -1,3 +1,4 @@
+import base64
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -31,11 +32,20 @@ from s2_sdk._mappers import (
 from s2_sdk._producer import Producer
 from s2_sdk._retrier import Retrier, http_retry_on, is_safe_to_retry_unary
 from s2_sdk._s2s._read_session import run_read_session
-from s2_sdk._types import ONE_MIB, Compression, Endpoints, Retry, Timeout, metered_bytes
+from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
+    ONE_MIB,
+    Compression,
+    Endpoints,
+    Retry,
+    Timeout,
+    metered_bytes,
+)
 from s2_sdk._validators import (
     validate_append_input,
     validate_basin,
     validate_batching,
+    validate_encryption_key,
     validate_max_unacked,
     validate_retry,
 )
@@ -608,11 +618,22 @@ class S2Basin:
         )
         return stream_info_from_json(response.json())
 
-    def stream(self, name: str) -> "S2Stream":
+    def stream(
+        self,
+        name: str,
+        *,
+        encryption_key: bytes | str | None = None,
+    ) -> "S2Stream":
         """Get an :class:`S2Stream` for performing stream-level operations.
 
         Args:
             name: Name of the stream.
+            encryption_key: Key for encrypting records on append and decrypting
+                them on read. Required when encryption is enabled via
+                :attr:`BasinConfig.stream_cipher` (see :class:`Encryption`
+                for supported algorithms).
+                If ``bytes``, it will get converted to a base64 encoded str.
+                If ``str``, it must be base64 encoded.
 
         Returns:
             An :class:`S2Stream` bound to the given stream name.
@@ -620,11 +641,17 @@ class S2Basin:
         Tip:
             Also available via subscript: ``s2["my-basin"]["my-stream"]``.
         """
+        if isinstance(encryption_key, str):
+            validate_encryption_key(encryption_key)
+        elif isinstance(encryption_key, bytes):
+            encryption_key = base64.b64encode(encryption_key).decode()
+
         return S2Stream(
             name,
             self._client,
             retry=self._retry,
             compression=self._compression,
+            encryption_key=encryption_key,
         )
 
     @fallible
@@ -757,6 +784,7 @@ class S2Stream:
         "_name",
         "_client",
         "_compression",
+        "_encryption_key",
         "_retry",
         "_retrier",
         "_append_retrier",
@@ -769,11 +797,13 @@ class S2Stream:
         *,
         retry: Retry,
         compression: Compression,
+        encryption_key: str | None = None,
     ) -> None:
         self._name = name
         self._client = client
         self._retry = retry
         self._compression = compression
+        self._encryption_key = encryption_key
         self._retrier = Retrier(
             should_retry_on=http_retry_on,
             max_attempts=retry.max_attempts,
@@ -796,6 +826,15 @@ class S2Stream:
     def name(self) -> str:
         """Stream name."""
         return self._name
+
+    def _request_headers(
+        self, headers: dict[str, str] | None = None
+    ) -> dict[str, str] | None:
+        if self._encryption_key is None:
+            return headers
+        merged = dict(headers or {})
+        merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key
+        return merged
 
     @fallible
     async def check_tail(self) -> types.StreamPosition:
@@ -831,10 +870,12 @@ class S2Stream:
             "POST",
             _stream_path(self.name, "/records"),
             content=body,
-            headers={
-                "content-type": "application/x-protobuf",
-                "accept": "application/x-protobuf",
-            },
+            headers=self._request_headers(
+                {
+                    "content-type": "application/x-protobuf",
+                    "accept": "application/x-protobuf",
+                }
+            ),
         )
         ack = pb.AppendAck()
         ack.ParseFromString(response.content)
@@ -878,6 +919,7 @@ class S2Stream:
             compression=self._compression,
             max_unacked_bytes=max_unacked_bytes,
             max_unacked_batches=max_unacked_batches,
+            encryption_key=self._encryption_key,
         )
 
     def producer(
@@ -922,6 +964,7 @@ class S2Stream:
             stream_name=self.name,
             retry=self._retry,
             compression=self._compression,
+            encryption_key=self._encryption_key,
             fencing_token=fencing_token,
             match_seq_num=match_seq_num,
             max_unacked_bytes=max_unacked_bytes,
@@ -971,7 +1014,7 @@ class S2Stream:
             "GET",
             _stream_path(self.name, "/records"),
             params=params,
-            headers={"accept": "application/x-protobuf"},
+            headers=self._request_headers({"accept": "application/x-protobuf"}),
         )
 
         proto_batch = pb.ReadBatch()
@@ -1030,6 +1073,7 @@ class S2Stream:
             wait,
             ignore_command_records,
             retry=self._retry,
+            encryption_key=self._encryption_key,
         ):
             yield batch
 

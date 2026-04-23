@@ -60,6 +60,7 @@ class Producer:
         match_seq_num: int | None,
         max_unacked_bytes: int,
         batching: Batching,
+        encryption_key: str | None = None,
     ) -> None:
         self._session = AppendSession(
             client=client,
@@ -68,6 +69,7 @@ class Producer:
             compression=compression,
             max_unacked_bytes=max_unacked_bytes,
             max_unacked_batches=None,
+            encryption_key=encryption_key,
         )
         self._fencing_token = fencing_token
         self._match_seq_num = match_seq_num

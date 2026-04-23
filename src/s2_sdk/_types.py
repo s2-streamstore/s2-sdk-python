@@ -11,6 +11,7 @@ from s2_sdk._exceptions import S2ClientError, fallible
 T = TypeVar("T")
 
 ONE_MIB = 1024 * 1024
+_S2_ENCRYPTION_KEY_HEADER = "s2-encryption-key"
 
 
 def _parse_scheme(url: str) -> str:
@@ -48,6 +49,13 @@ class AppendRetryPolicy(_DocEnum):
         "no-side-effects",
         "Retry only when no server-side mutation could have occurred.",
     )
+
+
+class Encryption(_DocEnum):
+    """Encryption algorithm."""
+
+    AEGIS_256 = "aegis-256", "AEGIS-256."
+    AES_256_GCM = "aes-256-gcm", "AES-256-GCM."
 
 
 class Endpoints:
@@ -479,6 +487,9 @@ class BasinConfig:
     default_stream_config: StreamConfig | None = None
     """Default configuration for streams in this basin."""
 
+    stream_cipher: Encryption | None = None
+    """Encryption algorithm to apply to newly created streams in the basin."""
+
     create_stream_on_append: bool | None = None
     """Create stream on append if it doesn't exist."""
 
@@ -515,6 +526,9 @@ class StreamInfo:
 
     deleted_at: datetime | None
     """Deletion time if the stream is being deleted."""
+
+    cipher: Encryption | None = None
+    """Encryption algorithm for this stream, if encryption is enabled."""
 
 
 @dataclass(slots=True)

@@ -19,6 +19,7 @@ from s2_sdk._s2s._protocol import (
     read_messages,
 )
 from s2_sdk._types import (
+    _S2_ENCRYPTION_KEY_HEADER,
     AppendAck,
     AppendInput,
     AppendRetryPolicy,
@@ -43,6 +44,7 @@ async def run_append_session(
     retry: Retry,
     compression: Compression,
     ack_timeout: float | None = None,
+    encryption_key: str | None = None,
 ) -> AsyncIterable[AppendAck]:
     input_queue: asyncio.Queue[AppendInput | None] = asyncio.Queue(
         maxsize=_QUEUE_MAX_SIZE
@@ -85,6 +87,7 @@ async def run_append_session(
                         compression,
                         frame_signal,
                         ack_timeout,
+                        encryption_key,
                     )
                     return
                 except Exception as e:
@@ -135,14 +138,19 @@ async def _run_attempt(
     compression: Compression,
     frame_signal: FrameSignal | None,
     ack_timeout: float | None = None,
+    encryption_key: str | None = None,
 ) -> None:
+    headers = {
+        "content-type": "s2s/proto",
+        "accept": "s2s/proto",
+    }
+    if encryption_key is not None:
+        headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
+
     async with client.streaming_request(
         "POST",
         _stream_records_path(stream_name),
-        headers={
-            "content-type": "s2s/proto",
-            "accept": "s2s/proto",
-        },
+        headers=headers,
         content=_body_gen(inflight_inputs, input_queue, pending_resend, compression),
         frame_signal=frame_signal,
     ) as response:
