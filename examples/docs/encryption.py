@@ -11,13 +11,13 @@ import os
 import time
 
 from s2_sdk import (
+    S2,
     AppendInput,
     BasinConfig,
     EncryptionAlgorithm,
     EncryptionKey,
     ReadLimit,
     Record,
-    S2,
     SeqNum,
 )
 
@@ -47,7 +47,8 @@ async def main():
             config=BasinConfig(stream_cipher=EncryptionAlgorithm.AES_256_GCM),
         )
         # ANCHOR_END: basin-cipher
-        
+
+        # Ensure stream exists
         try:
             await basin.create_stream(stream_name)
         except Exception:
