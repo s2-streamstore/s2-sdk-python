@@ -14,8 +14,7 @@ from s2_sdk import (
     S2,
     AppendInput,
     BasinConfig,
-    EncryptionAlgorithm,
-    EncryptionKey,
+    Encryption,
     ReadLimit,
     Record,
     SeqNum,
@@ -37,14 +36,14 @@ async def main():
         try:
             await client.create_basin(
                 basin_name,
-                config=BasinConfig(stream_cipher=EncryptionAlgorithm.AEGIS_256),
+                config=BasinConfig(stream_cipher=Encryption.AEGIS_256),
             )
         except Exception:
             pass
 
         await client.reconfigure_basin(
             basin_name,
-            config=BasinConfig(stream_cipher=EncryptionAlgorithm.AES_256_GCM),
+            config=BasinConfig(stream_cipher=Encryption.AES_256_GCM),
         )
         # ANCHOR_END: basin-cipher
 
@@ -57,7 +56,7 @@ async def main():
         # ANCHOR: append-read
         stream = basin.stream(
             stream_name,
-            encryption_key=EncryptionKey(os.environ["S2_ENCRYPTION_KEY"]),
+            encryption_key=os.environ["S2_ENCRYPTION_KEY"],
         )
 
         await stream.append(
