@@ -13,5 +13,5 @@ uv run python -m grpc_tools.protoc \
 find . -name '*.py' | xargs -I{} sed -i '' 's/from s2\.\(v[0-9][a-z0-9]*\) import s2_pb2/from s2_sdk._generated.s2.\1 import s2_pb2/' {}
 cd ../../..
 
-# Run checks
-uv run poe checker
+# Fix generated code quality
+uv run poe cq-fix
