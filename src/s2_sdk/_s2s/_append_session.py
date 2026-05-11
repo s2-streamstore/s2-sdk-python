@@ -193,7 +193,11 @@ async def _run_attempt(
 
             if resend_remaining > 0:
                 resend_remaining -= 1
-                if resend_remaining == 0 and frame_signal is not None:
+                if (
+                    resend_remaining == 0
+                    and frame_signal is not None
+                    and len(inflight_inputs) == 0
+                ):
                     frame_signal.reset()
 
 
