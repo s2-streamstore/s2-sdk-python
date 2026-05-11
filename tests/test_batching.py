@@ -85,7 +85,12 @@ async def test_linger_flushes_batches():
 
 
 @pytest.mark.asyncio
-async def test_batch_accumulator_flushes_when_source_iter_raises():
+@pytest.mark.parametrize(
+    "linger",
+    [timedelta(0), timedelta(milliseconds=10)],
+    ids=["zero_linger", "non_zero_linger"],
+)
+async def test_batch_accumulator_flushes_when_source_iter_raises(linger):
     async def records():
         yield Record(body=b"r1")
         yield Record(body=b"r2")
@@ -94,7 +99,7 @@ async def test_batch_accumulator_flushes_when_source_iter_raises():
     batches = []
     with pytest.raises(RuntimeError, match="err"):
         async for batch in append_record_batches(
-            records(), batching=Batching(linger=timedelta(0))
+            records(), batching=Batching(linger=linger)
         ):
             batches.append(batch)
 
