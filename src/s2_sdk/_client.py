@@ -948,6 +948,8 @@ class Connection:
                 for stream_id, state in self._streams.items():
                     if stream_id > event.last_stream_id:
                         self._fail_stream(state, err)
+                for state in self._pending_streams.values():
+                    self._fail_stream(state, err)
             else:
                 self._fail_all_streams(err)
 
