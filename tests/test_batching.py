@@ -85,6 +85,23 @@ async def test_linger_flushes_batches():
 
 
 @pytest.mark.asyncio
+async def test_batch_accumulator_flushes_when_source_iter_raises():
+    async def records():
+        yield Record(body=b"r1")
+        yield Record(body=b"r2")
+        raise RuntimeError("err")
+
+    batches = []
+    with pytest.raises(RuntimeError, match="err"):
+        async for batch in append_record_batches(
+            records(), batching=Batching(linger=timedelta(0))
+        ):
+            batches.append(batch)
+
+    assert batches == [[Record(body=b"r1"), Record(body=b"r2")]]
+
+
+@pytest.mark.asyncio
 async def test_append_inputs_skips_empty_batches():
     inputs = []
     async for append_input in append_inputs(
