@@ -88,6 +88,10 @@ async def append_record_batches(
                 acc.add(record)
 
             yield acc.take()
+    except Exception:
+        if not acc.is_empty():
+            yield acc.take()
+        raise
     finally:
         if pending_next is not None:
             pending_next.cancel()

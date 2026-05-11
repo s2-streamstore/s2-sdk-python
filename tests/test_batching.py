@@ -85,6 +85,28 @@ async def test_linger_flushes_batches():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "linger",
+    [timedelta(0), timedelta(milliseconds=10)],
+    ids=["zero_linger", "non_zero_linger"],
+)
+async def test_batch_accumulator_flushes_when_source_iter_raises(linger):
+    async def records():
+        yield Record(body=b"r1")
+        yield Record(body=b"r2")
+        raise RuntimeError("err")
+
+    batches = []
+    with pytest.raises(RuntimeError, match="err"):
+        async for batch in append_record_batches(
+            records(), batching=Batching(linger=linger)
+        ):
+            batches.append(batch)
+
+    assert batches == [[Record(body=b"r1"), Record(body=b"r2")]]
+
+
+@pytest.mark.asyncio
 async def test_append_inputs_skips_empty_batches():
     inputs = []
     async for append_input in append_inputs(
