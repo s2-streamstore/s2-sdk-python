@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.0...v0.2.1) (2026-05-11)
+
+
+### Bug Fixes
+
+* batch accumulator doesn't flush when source iter raises  ([#49](https://github.com/s2-streamstore/s2-sdk-python/issues/49)) ([cd20814](https://github.com/s2-streamstore/s2-sdk-python/commit/cd208149b2d69a2e075a44f6a894ffc469d57014))
+* incorrect frame signal reset condition after resending append inputs  ([#47](https://github.com/s2-streamstore/s2-sdk-python/issues/47)) ([49c3237](https://github.com/s2-streamstore/s2-sdk-python/commit/49c3237a7c37cc5b63f0327688aab53ac468412d))
+* pending streams not failed when GOAWAY is received  ([#50](https://github.com/s2-streamstore/s2-sdk-python/issues/50)) ([74baa61](https://github.com/s2-streamstore/s2-sdk-python/commit/74baa612bf102d12b850301fc678d4df6f1c670d))
+
 ## [0.2.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.1.3...v0.2.0) (2026-04-23)
 
 
