@@ -24,7 +24,7 @@ jobs:
       - name: Code quality check
         run: uv run poe cq-check
       - name: Unit tests
-        run: uv run pytest tests/ -v -m 'not (account or basin or stream or metrics)'
+        run: uv run pytest tests/ -v -m 'not (account or basin or stream or metrics or correctness)'
       - name: Check docs build
         working-directory: ./docs
         run: |

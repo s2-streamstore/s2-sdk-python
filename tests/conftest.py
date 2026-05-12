@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Final
 import pytest
 import pytest_asyncio
 
-from s2_sdk import S2, Compression, Endpoints, S2Basin, S2Stream
+from s2_sdk import S2, Compression, Endpoints, Retry, S2Basin, S2Stream
 
 pytest_plugins = ["pytest_asyncio"]
 
@@ -50,22 +50,35 @@ def endpoints() -> Endpoints | None:
     return None
 
 
+@pytest.fixture(scope="session")
+def retry() -> Retry | None:
+    return None
+
+
 @pytest_asyncio.fixture(scope="session")
 async def s2(
-    access_token: str, compression: Compression, endpoints: Endpoints | None
+    access_token: str,
+    compression: Compression,
+    endpoints: Endpoints | None,
+    retry: Retry | None,
 ) -> AsyncGenerator[S2, None]:
-    async with S2(access_token, endpoints=endpoints, compression=compression) as s2:
+    async with S2(
+        access_token,
+        endpoints=endpoints,
+        compression=compression,
+        retry=retry,
+    ) as s2:
         yield s2
 
 
 @pytest.fixture
-def basin_name() -> str:
-    return _basin_name()
+def basin_name(basin_prefix: str) -> str:
+    return _basin_name(basin_prefix)
 
 
 @pytest.fixture
-def basin_names() -> list[str]:
-    return [_basin_name() for _ in range(3)]
+def basin_names(basin_prefix: str) -> list[str]:
+    return [_basin_name(basin_prefix) for _ in range(3)]
 
 
 @pytest.fixture
@@ -94,8 +107,8 @@ async def basin(s2: S2, basin_name: str) -> AsyncGenerator[S2Basin, None]:
 
 
 @pytest_asyncio.fixture(scope="class")
-async def shared_basin(s2: S2) -> AsyncGenerator[S2Basin, None]:
-    basin_name = _basin_name()
+async def shared_basin(s2: S2, basin_prefix: str) -> AsyncGenerator[S2Basin, None]:
+    basin_name = _basin_name(basin_prefix)
     await s2.create_basin(name=basin_name)
 
     try:
@@ -117,8 +130,12 @@ async def stream(
         await basin.delete_stream(stream_name)
 
 
-def _basin_name() -> str:
-    return f"{BASIN_PREFIX}-{uuid.uuid4().hex[:8]}"
+def _basin_name(prefix: str) -> str:
+    suffix = uuid.uuid4().hex[:8]
+    prefix = prefix.strip("-")[: 48 - len(suffix) - 1].strip("-")
+    if not prefix:
+        return suffix
+    return f"{prefix}-{suffix}"
 
 
 def _stream_name() -> str:
