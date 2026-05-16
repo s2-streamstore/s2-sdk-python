@@ -9,7 +9,7 @@ from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._mappers import append_ack_from_proto, append_input_to_proto
-from s2_sdk._retrier import Attempt, compute_backoffs, is_safe_to_retry_session
+from s2_sdk._retrier import Attempt, compute_backoff, is_safe_to_retry_session
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import (
     Message,
@@ -64,11 +64,9 @@ async def run_append_session(
 
     async def retrying_inner():
         inflight_inputs: deque[_InflightInput] = deque()
-        backoffs = compute_backoffs(
-            retry._max_retries(),
-            min_base_delay=retry.min_base_delay.total_seconds(),
-            max_base_delay=retry.max_base_delay.total_seconds(),
-        )
+        max_retries = retry._max_retries()
+        min_base_delay = retry.min_base_delay.total_seconds()
+        max_base_delay = retry.max_base_delay.total_seconds()
         attempt = Attempt(0)
         try:
             while True:
@@ -92,18 +90,22 @@ async def run_append_session(
                     return
                 except Exception as e:
                     has_inflight = len(inflight_inputs) > 0
-                    if attempt.value < len(backoffs) and is_safe_to_retry_session(
+                    if attempt.value < max_retries and is_safe_to_retry_session(
                         e,
                         retry.append_retry_policy,
                         has_inflight,
                         frame_signal,
                     ):
-                        backoff = backoffs[attempt.value]
+                        backoff = compute_backoff(
+                            attempt.value,
+                            min_base_delay=min_base_delay,
+                            max_base_delay=max_base_delay,
+                        )
                         logger.debug(
                             "retrying append session: error=%s backoff=%.3fs retries_remaining=%d",
                             e,
                             backoff,
-                            len(backoffs) - attempt.value - 1,
+                            max_retries - attempt.value - 1,
                         )
                         await asyncio.sleep(backoff)
                         attempt.value += 1
@@ -111,7 +113,7 @@ async def run_append_session(
                         logger.debug(
                             "not retrying append session: error=%s retries_exhausted=%s",
                             e,
-                            attempt.value >= len(backoffs),
+                            attempt.value >= max_retries,
                         )
                         raise
         finally:
