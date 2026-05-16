@@ -8,7 +8,7 @@ import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError
 from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
-from s2_sdk._retrier import Attempt, compute_backoffs, http_retry_on
+from s2_sdk._retrier import Attempt, compute_backoff, http_retry_on
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
@@ -40,11 +40,9 @@ async def run_read_session(
     encryption_key: str | None = None,
 ) -> AsyncIterable[ReadBatch]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
-    backoffs = compute_backoffs(
-        retry._max_retries(),
-        min_base_delay=retry.min_base_delay.total_seconds(),
-        max_base_delay=retry.max_base_delay.total_seconds(),
-    )
+    max_retries = retry._max_retries()
+    min_base_delay = retry.min_base_delay.total_seconds()
+    max_base_delay = retry.max_base_delay.total_seconds()
     attempt = Attempt(0)
 
     remaining_count = limit.count if limit and limit.count is not None else None
@@ -122,13 +120,17 @@ async def run_read_session(
 
             return
         except Exception as e:
-            if attempt.value < len(backoffs) and http_retry_on(e):
-                backoff = backoffs[attempt.value]
+            if attempt.value < max_retries and http_retry_on(e):
+                backoff = compute_backoff(
+                    attempt.value,
+                    min_base_delay=min_base_delay,
+                    max_base_delay=max_base_delay,
+                )
                 logger.debug(
                     "retrying read session: error=%s backoff=%.3fs retries_remaining=%d",
                     e,
                     backoff,
-                    len(backoffs) - attempt.value - 1,
+                    max_retries - attempt.value - 1,
                 )
                 await asyncio.sleep(backoff)
                 attempt.value += 1
@@ -137,7 +139,7 @@ async def run_read_session(
                     "not retrying read session: error=%s is_retryable=%s retries_exhausted=%s",
                     e,
                     http_retry_on(e),
-                    attempt.value >= len(backoffs),
+                    attempt.value >= max_retries,
                 )
                 raise e
 

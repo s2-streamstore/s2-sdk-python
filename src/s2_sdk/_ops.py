@@ -125,7 +125,7 @@ class S2:
         self._basin_clients: dict[str, HttpClient] = {}
         self._retrier = Retrier(
             should_retry_on=http_retry_on,
-            max_attempts=retry.max_attempts,
+            max_retries=retry._max_retries(),
             min_base_delay=retry.min_base_delay.total_seconds(),
             max_base_delay=retry.max_base_delay.total_seconds(),
         )
@@ -568,7 +568,7 @@ class S2Basin:
         self._compression = compression
         self._retrier = Retrier(
             should_retry_on=http_retry_on,
-            max_attempts=retry.max_attempts,
+            max_retries=retry._max_retries(),
             min_base_delay=retry.min_base_delay.total_seconds(),
             max_base_delay=retry.max_base_delay.total_seconds(),
         )
@@ -806,7 +806,7 @@ class S2Stream:
         self._encryption_key = encryption_key
         self._retrier = Retrier(
             should_retry_on=http_retry_on,
-            max_attempts=retry.max_attempts,
+            max_retries=retry._max_retries(),
             min_base_delay=retry.min_base_delay.total_seconds(),
             max_base_delay=retry.max_base_delay.total_seconds(),
         )
@@ -814,7 +814,7 @@ class S2Stream:
             should_retry_on=lambda e: is_safe_to_retry_unary(
                 e, retry.append_retry_policy
             ),
-            max_attempts=retry.max_attempts,
+            max_retries=retry._max_retries(),
             min_base_delay=retry.min_base_delay.total_seconds(),
             max_base_delay=retry.max_base_delay.total_seconds(),
         )

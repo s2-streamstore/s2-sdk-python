@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import random
 from dataclasses import dataclass
 from typing import Callable
@@ -15,28 +16,28 @@ class Retrier:
     def __init__(
         self,
         should_retry_on: Callable[[Exception], bool],
-        max_attempts: int,
+        max_retries: int,
         min_base_delay: float = 0.1,
         max_base_delay: float = 1.0,
     ):
         self.should_retry_on = should_retry_on
-        self.max_attempts = max_attempts
+        self.max_retries = max_retries
         self.min_base_delay = min_base_delay
         self.max_base_delay = max_base_delay
 
     async def __call__(self, f: Callable, *args, **kwargs):
-        backoffs = compute_backoffs(
-            attempts=max(self.max_attempts - 1, 0),
-            min_base_delay=self.min_base_delay,
-            max_base_delay=self.max_base_delay,
-        )
+        max_retries = self.max_retries
         attempt = 0
         while True:
             try:
                 return await f(*args, **kwargs)
             except Exception as e:
-                if attempt < len(backoffs) and self.should_retry_on(e):
-                    delay = backoffs[attempt]
+                if attempt < max_retries and self.should_retry_on(e):
+                    delay = compute_backoff(
+                        attempt,
+                        min_base_delay=self.min_base_delay,
+                        max_base_delay=self.max_base_delay,
+                    )
                     retry_after = getattr(e, "_retry_after", None)
                     if retry_after is not None:
                         delay = max(delay, retry_after)
@@ -44,7 +45,7 @@ class Retrier:
                         "retrying request: error=%s backoff=%.3fs retries_remaining=%d",
                         e,
                         delay,
-                        len(backoffs) - attempt - 1,
+                        max_retries - attempt - 1,
                     )
                     await asyncio.sleep(delay)
                     attempt += 1
@@ -53,7 +54,7 @@ class Retrier:
                         "not retrying request: error=%s is_retryable=%s retries_exhausted=%s",
                         e,
                         self.should_retry_on(e),
-                        attempt >= len(backoffs),
+                        attempt >= max_retries,
                     )
                     raise e
 
@@ -63,17 +64,17 @@ class Attempt:
     value: int
 
 
-def compute_backoffs(
-    attempts: int,
+def compute_backoff(
+    attempt: int,
     min_base_delay: float = 0.1,
     max_base_delay: float = 1.0,
-) -> list[float]:
-    backoffs = []
-    for n in range(attempts):
-        base_delay = min(min_base_delay * 2**n, max_base_delay)
-        jitter = random.uniform(0, base_delay)
-        backoffs.append(base_delay + jitter)
-    return backoffs
+) -> float:
+    try:
+        base_delay = min(math.ldexp(min_base_delay, attempt), max_base_delay)
+    except OverflowError:
+        base_delay = max_base_delay
+    jitter = random.uniform(0, base_delay)
+    return base_delay + jitter
 
 
 def is_safe_to_retry_unary(
