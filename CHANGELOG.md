@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.1...v0.2.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* uncapped and eager backoff calculation  ([#52](https://github.com/s2-streamstore/s2-sdk-python/issues/52)) ([89ba250](https://github.com/s2-streamstore/s2-sdk-python/commit/89ba250d48c2d388bc3c9ec7063dcc8c12afe515))
+
 ## [0.2.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.0...v0.2.1) (2026-05-11)
 
 
