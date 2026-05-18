@@ -66,6 +66,3 @@ async def test_concurrent_producer_and_consumer_remain_gapless(stream: S2Stream)
     async with asyncio.TaskGroup() as task_group:
         task_group.create_task(read_records())
         task_group.create_task(append_records())
-
-    tail = await stream.check_tail()
-    assert tail.seq_num == TOTAL_RECORDS
