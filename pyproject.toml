@@ -6,11 +6,7 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
-dependencies = [
-    "h2>=4.1.0",
-    "protobuf>=6.31.1,<7.0.0",
-    "zstandard>=0.23.0",
-]
+dependencies = ["h2>=4.1.0", "protobuf>=6.31.1,<7.0.0", "zstandard>=0.23.0"]
 
 [dependency-groups]
 dev = [
@@ -19,12 +15,9 @@ dev = [
     "poethepoet>=0.36.0",
     "ruff>=0.9.1",
     "types-protobuf>=5.29.1.20241207",
+    "hatchling>=1.29.0",
 ]
-test = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "pytest-timeout>=2.3.0",
-]
+test = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0", "pytest-timeout>=2.3.0"]
 docs = [
     "enum-tools[sphinx]>=0.12.0",
     "furo>=2024.8.6",
@@ -70,7 +63,11 @@ cq-check = ["lint", "format-check", "type-check"]
 cq-fix = ["lint-fix", "format", "type-check"]
 docs-check = "uv run --group docs sphinx-build -W -b html docs/source docs/build/html"
 docs-clean = "rm -rf docs/build"
-docs-live.sequence = ["docs-clean", "docs-check", {cmd = "uv run --group docs sphinx-autobuild docs/source docs/build/html --watch src/s2_sdk"}]
+docs-live.sequence = [
+    "docs-clean",
+    "docs-check",
+    { cmd = "uv run --group docs sphinx-autobuild docs/source docs/build/html --watch src/s2_sdk" },
+]
 e2e-tests = "uv run pytest tests/ -v -s -m 'account or basin or stream'"
 e2e-account-tests = "uv run pytest tests/ -v -s -m account"
 e2e-basin-tests = "uv run pytest tests/ -v -s -m basin"
