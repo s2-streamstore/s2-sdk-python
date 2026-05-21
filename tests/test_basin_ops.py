@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from s2_sdk import (
+    EnsureStatus,
     S2Basin,
     S2ServerError,
     S2Stream,
@@ -97,6 +98,72 @@ class TestBasinOperations:
         assert updated_config.timestamping.mode == TimestampingMode.CLIENT_PREFER
         assert updated_config.timestamping.uncapped is False
         assert updated_config.delete_on_empty_min_age == 3600
+
+    async def test_ensure_stream_created(self, shared_basin: S2Basin, stream_name: str):
+        info = await shared_basin.ensure_stream(
+            stream_name,
+            config=StreamConfig(delete_on_empty_min_age=86400),
+        )
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.stream.name == stream_name
+
+            config = await shared_basin.get_stream_config(stream_name)
+            assert config.delete_on_empty_min_age == 86400
+        finally:
+            await shared_basin.delete_stream(stream_name)
+
+    async def test_ensure_stream_config_updated(
+        self, shared_basin: S2Basin, stream_name: str
+    ):
+        info = await shared_basin.ensure_stream(
+            stream_name,
+            config=StreamConfig(
+                timestamping=Timestamping(mode=TimestampingMode.CLIENT_REQUIRE),
+            ),
+        )
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.stream.name == stream_name
+
+            info = await shared_basin.ensure_stream(
+                stream_name,
+                config=StreamConfig(
+                    timestamping=Timestamping(mode=TimestampingMode.ARRIVAL),
+                ),
+            )
+
+            assert info.status is EnsureStatus.CONFIG_UPDATED
+            assert info.stream.name == stream_name
+
+            updated_config = await shared_basin.get_stream_config(stream_name)
+            assert updated_config.timestamping is not None
+            assert updated_config.timestamping.mode == TimestampingMode.ARRIVAL
+        finally:
+            await shared_basin.delete_stream(stream_name)
+
+    async def test_ensure_stream_config_unchanged(
+        self, shared_basin: S2Basin, stream_name: str
+    ):
+        info = await shared_basin.ensure_stream(stream_name)
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.stream.name == stream_name
+
+            config = await shared_basin.get_stream_config(stream_name)
+
+            info = await shared_basin.ensure_stream(stream_name, config=config)
+
+            assert info.status is EnsureStatus.CONFIG_UNCHANGED
+            assert info.stream.name == stream_name
+
+            updated_config = await shared_basin.get_stream_config(stream_name)
+            assert updated_config == config
+        finally:
+            await shared_basin.delete_stream(stream_name)
 
     async def test_list_streams(self, shared_basin: S2Basin, stream_names: list[str]):
         basin = shared_basin
