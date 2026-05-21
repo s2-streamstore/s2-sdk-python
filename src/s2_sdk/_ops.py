@@ -19,6 +19,8 @@ from s2_sdk._mappers import (
     basin_config_to_json,
     basin_info_from_json,
     basin_reconfiguration_to_json,
+    ensured_basin_info_from_response,
+    ensured_stream_info_from_response,
     metric_set_from_json,
     read_batch_from_proto,
     read_limit_params,
@@ -191,6 +193,39 @@ class S2:
             headers={"s2-request-token": _s2_request_token()},
         )
         return basin_info_from_json(response.json())
+
+    @fallible
+    async def ensure_basin(
+        self, name: str, *, config: types.BasinConfig | None = None
+    ) -> types.EnsuredBasinInfo:
+        """Ensure a basin.
+
+        If the basin doesn’t exist, creates the basin with specified configuration.
+
+        If the basin already exists:
+
+        - Its configuration is updated to the specified configuration, if different.
+        - Its configuration is unchanged, if the specified configuration is same.
+
+        Args:
+            name: Name of the basin.
+            config: Configuration for the basin.
+
+        Returns:
+            Information about the ensured basin.
+
+        Note:
+            ``name`` must be globally unique, 8--48 characters, comprising lowercase
+            letters, numbers, and hyphens. It cannot begin or end with a hyphen.
+        """
+        validate_basin(name)
+        json = None
+        if config is not None:
+            json = {"config": basin_config_to_json(config)}
+        response = await self._retrier(
+            self._account_client.unary_request, "PUT", f"/v1/basins/{name}", json=json
+        )
+        return ensured_basin_info_from_response(response)
 
     def basin(self, name: str) -> "S2Basin":
         """Get an :class:`S2Basin` for performing basin-level operations.
@@ -617,6 +652,35 @@ class S2Basin:
             headers={"s2-request-token": _s2_request_token()},
         )
         return stream_info_from_json(response.json())
+
+    @fallible
+    async def ensure_stream(
+        self,
+        name: str,
+        *,
+        config: types.StreamConfig | None = None,
+    ) -> types.EnsuredStreamInfo:
+        """Ensure a stream.
+
+        If the stream doesn’t exist, creates the stream with specified configuration.
+
+        If the stream already exists:
+
+        - Its configuration is updated to the specified configuration, if different.
+        - Its configuration is unchanged, if the specified configuration is same.
+
+        Args:
+            name: Name of the stream.
+            config: Configuration for the stream.
+
+        Returns:
+            Information about the ensured stream.
+        """
+        json = stream_config_to_json(config)
+        response = await self._retrier(
+            self._client.unary_request, "PUT", _stream_path(name), json=json
+        )
+        return ensured_stream_info_from_response(response)
 
     def stream(
         self,

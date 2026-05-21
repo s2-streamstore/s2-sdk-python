@@ -531,6 +531,42 @@ class StreamInfo:
     """Encryption algorithm for this stream, if encryption is enabled."""
 
 
+class EnsureStatus(_DocEnum):
+    """Outcome of an ensure operation."""
+
+    CREATED = "created", "Resource created."
+    CONFIG_UPDATED = (
+        "config-updated",
+        "Resource already existed, and its config was updated.",
+    )
+    CONFIG_UNCHANGED = (
+        "config-unchanged",
+        "Resource already existed, and its config is unchanged.",
+    )
+
+
+@dataclass(slots=True)
+class EnsuredBasinInfo:
+    """Basin information with ensure operation outcome."""
+
+    basin: BasinInfo
+    """Basin information."""
+
+    status: EnsureStatus
+    """Outcome of the ensure operation."""
+
+
+@dataclass(slots=True)
+class EnsuredStreamInfo:
+    """Stream information with ensure operation outcome."""
+
+    stream: StreamInfo
+    """Stream information."""
+
+    status: EnsureStatus
+    """Outcome of the ensure operation."""
+
+
 @dataclass(slots=True)
 class ExactMatch:
     """Match only the resource with this exact name."""

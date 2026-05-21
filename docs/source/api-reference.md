@@ -115,6 +115,14 @@
 .. autoclass:: StreamInfo()
     :members:
 
+.. autoclass:: EnsuredBasinInfo()
+    :members:
+
+.. autoclass:: EnsuredStreamInfo()
+    :members:
+
+.. autoenum:: EnsureStatus
+
 .. autoclass:: ExactMatch
     :members:
 

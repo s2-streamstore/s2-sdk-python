@@ -6,6 +6,7 @@ from s2_sdk import (
     S2,
     AccessTokenScope,
     BasinConfig,
+    EnsureStatus,
     Operation,
     OperationGroupPermissions,
     Permission,
@@ -86,6 +87,63 @@ class TestAccountOperations:
         )
         assert updated_config.default_stream_config.retention_policy == 3600
         assert updated_config.create_stream_on_append is True
+
+    async def test_ensure_basin_created(self, s2: S2, basin_name: str):
+        info = await s2.ensure_basin(
+            basin_name,
+            config=BasinConfig(create_stream_on_read=True),
+        )
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.basin.name == basin_name
+
+            config = await s2.get_basin_config(basin_name)
+            assert config.create_stream_on_read is True
+        finally:
+            await s2.delete_basin(basin_name)
+
+    async def test_ensure_basin_config_updated(self, s2: S2, basin_name: str):
+        info = await s2.ensure_basin(
+            basin_name,
+            config=BasinConfig(create_stream_on_append=True),
+        )
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.basin.name == basin_name
+
+            info = await s2.ensure_basin(
+                basin_name,
+                config=BasinConfig(create_stream_on_append=False),
+            )
+
+            assert info.status is EnsureStatus.CONFIG_UPDATED
+            assert info.basin.name == basin_name
+
+            updated_config = await s2.get_basin_config(basin_name)
+            assert updated_config.create_stream_on_append is False
+        finally:
+            await s2.delete_basin(basin_name)
+
+    async def test_ensure_basin_config_unchanged(self, s2: S2, basin_name: str):
+        info = await s2.ensure_basin(basin_name)
+
+        try:
+            assert info.status is EnsureStatus.CREATED
+            assert info.basin.name == basin_name
+
+            config = await s2.get_basin_config(basin_name)
+
+            info = await s2.ensure_basin(basin_name, config=config)
+
+            assert info.status is EnsureStatus.CONFIG_UNCHANGED
+            assert info.basin.name == basin_name
+
+            updated_config = await s2.get_basin_config(basin_name)
+            assert updated_config == config
+        finally:
+            await s2.delete_basin(basin_name)
 
     async def test_list_basins(self, s2: S2, basin_names: list[str]):
         basin_infos = []

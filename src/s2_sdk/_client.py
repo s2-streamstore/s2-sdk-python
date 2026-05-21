@@ -4,7 +4,7 @@ import asyncio
 import json as json_lib
 import ssl
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from importlib.metadata import version
@@ -164,7 +164,7 @@ class HttpClient:
                     resp_body, _ENCODING_COMPRESSION[content_encoding]
                 )
 
-            response = Response(status_code, resp_body)
+            response = Response(status_code, resp_body, resp_headers)
         except TransportError:
             raise
         except asyncio.TimeoutError:
@@ -276,7 +276,7 @@ class HttpClient:
         url_path: str,
         extra_headers: dict[str, str] | None = None,
     ) -> list[tuple[str, str]]:
-        h = [
+        headers = [
             (":method", method),
             (":path", url_path),
             (":scheme", self._scheme),
@@ -284,14 +284,16 @@ class HttpClient:
             ("user-agent", _USER_AGENT),
         ]
         if self._compression != Compression.NONE:
-            h.append(("accept-encoding", _COMPRESSION_ENCODING[self._compression]))
+            headers.append(
+                ("accept-encoding", _COMPRESSION_ENCODING[self._compression])
+            )
         if self._headers:
             for k, v in self._headers.items():
-                h.append((k.lower(), v))
+                headers.append((k.lower(), v))
         if extra_headers:
             for k, v in extra_headers.items():
-                h.append((k.lower(), v))
-        return h
+                headers.append((k.lower(), v))
+        return headers
 
 
 class ConnectionPool:
@@ -433,22 +435,24 @@ class ConnectionPool:
 
 
 class Response:
-    __slots__ = ("status_code", "_content")
+    __slots__ = ("status_code", "content", "headers")
 
-    def __init__(self, status_code: int, content: bytes) -> None:
+    def __init__(
+        self,
+        status_code: int,
+        content: bytes,
+        headers: Iterable[tuple[str, str]] = (),
+    ) -> None:
         self.status_code = status_code
-        self._content = content
-
-    @property
-    def content(self) -> bytes:
-        return self._content
+        self.content = content
+        self.headers = tuple(headers)
 
     @property
     def text(self) -> str:
-        return self._content.decode("utf-8", errors="replace")
+        return self.content.decode("utf-8", errors="replace")
 
     def json(self) -> Any:
-        return json_lib.loads(self._content)
+        return json_lib.loads(self.content)
 
 
 class StreamingResponse:

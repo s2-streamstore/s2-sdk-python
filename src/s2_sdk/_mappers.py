@@ -1,7 +1,9 @@
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Literal
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
+from s2_sdk._client import Response
 from s2_sdk._types import (
     AccessTokenInfo,
     AccessTokenScope,
@@ -12,6 +14,9 @@ from s2_sdk._types import (
     BasinInfo,
     BasinScope,
     Encryption,
+    EnsuredBasinInfo,
+    EnsuredStreamInfo,
+    EnsureStatus,
     ExactMatch,
     Gauge,
     Label,
@@ -38,6 +43,13 @@ from s2_sdk._types import (
 )
 
 _ReadStart = SeqNum | Timestamp | TailOffset
+
+_S2_PROVISION_RESULT_HEADER = "s2-provision-result"
+_ENSURE_STATUS_FROM_PROVISION_RESULT = {
+    "created": EnsureStatus.CREATED,
+    "updated": EnsureStatus.CONFIG_UPDATED,
+    "noop": EnsureStatus.CONFIG_UNCHANGED,
+}
 
 
 def basin_config_to_json(config: BasinConfig | None) -> dict[str, Any] | None:
@@ -147,6 +159,23 @@ def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
     )
 
 
+def _ensure_status_from_headers(headers: Iterable[tuple[str, str]]) -> EnsureStatus:
+    for k, v in headers:
+        if k == _S2_PROVISION_RESULT_HEADER:
+            status = _ENSURE_STATUS_FROM_PROVISION_RESULT.get(v)
+            if status is None:
+                raise ValueError(f"unrecognized s2-provision-result header: {v!r}")
+            return status
+    raise ValueError("missing s2-provision-result header")
+
+
+def ensured_basin_info_from_response(response: Response) -> EnsuredBasinInfo:
+    return EnsuredBasinInfo(
+        basin=basin_info_from_json(response.json()),
+        status=_ensure_status_from_headers(response.headers),
+    )
+
+
 def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
     created_at = datetime.fromisoformat(data["created_at"])
     deleted_at_str = data.get("deleted_at")
@@ -157,6 +186,13 @@ def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
         created_at=created_at,
         deleted_at=deleted_at,
         cipher=Encryption(cipher) if cipher else None,
+    )
+
+
+def ensured_stream_info_from_response(response: Response) -> EnsuredStreamInfo:
+    return EnsuredStreamInfo(
+        stream=stream_info_from_json(response.json()),
+        status=_ensure_status_from_headers(response.headers),
     )
 
 
