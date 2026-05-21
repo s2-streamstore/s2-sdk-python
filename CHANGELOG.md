@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.2...v0.3.0) (2026-05-21)
+
+
+### Features
+
+* add `ensure_basin` and `ensure_stream` ops   ([#56](https://github.com/s2-streamstore/s2-sdk-python/issues/56)) ([b57079c](https://github.com/s2-streamstore/s2-sdk-python/commit/b57079c7aab1d104320491526b635a94cb6cd00e))
+
 ## [0.2.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.1...v0.2.2) (2026-05-17)
 
 
