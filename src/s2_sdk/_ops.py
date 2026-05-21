@@ -19,8 +19,8 @@ from s2_sdk._mappers import (
     basin_config_to_json,
     basin_info_from_json,
     basin_reconfiguration_to_json,
-    ensured_basin_info_from_response,
-    ensured_stream_info_from_response,
+    ensured_basin_info_from_json_and_headers,
+    ensured_stream_info_from_json_and_headers,
     metric_set_from_json,
     read_batch_from_proto,
     read_limit_params,
@@ -225,7 +225,9 @@ class S2:
         response = await self._retrier(
             self._account_client.unary_request, "PUT", f"/v1/basins/{name}", json=json
         )
-        return ensured_basin_info_from_response(response)
+        return ensured_basin_info_from_json_and_headers(
+            response.json(), response.headers
+        )
 
     def basin(self, name: str) -> "S2Basin":
         """Get an :class:`S2Basin` for performing basin-level operations.
@@ -680,7 +682,9 @@ class S2Basin:
         response = await self._retrier(
             self._client.unary_request, "PUT", _stream_path(name), json=json
         )
-        return ensured_stream_info_from_response(response)
+        return ensured_stream_info_from_json_and_headers(
+            response.json(), response.headers
+        )
 
     def stream(
         self,

@@ -3,7 +3,6 @@ from datetime import datetime
 from typing import Any, Literal
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
-from s2_sdk._client import Response
 from s2_sdk._types import (
     AccessTokenInfo,
     AccessTokenScope,
@@ -169,10 +168,12 @@ def _ensure_status_from_headers(headers: Iterable[tuple[str, str]]) -> EnsureSta
     raise ValueError("missing s2-provision-result header")
 
 
-def ensured_basin_info_from_response(response: Response) -> EnsuredBasinInfo:
+def ensured_basin_info_from_json_and_headers(
+    data: dict[str, Any], headers: Iterable[tuple[str, str]]
+) -> EnsuredBasinInfo:
     return EnsuredBasinInfo(
-        basin=basin_info_from_json(response.json()),
-        status=_ensure_status_from_headers(response.headers),
+        basin=basin_info_from_json(data),
+        status=_ensure_status_from_headers(headers),
     )
 
 
@@ -189,10 +190,12 @@ def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
     )
 
 
-def ensured_stream_info_from_response(response: Response) -> EnsuredStreamInfo:
+def ensured_stream_info_from_json_and_headers(
+    data: dict[str, Any], headers: Iterable[tuple[str, str]]
+) -> EnsuredStreamInfo:
     return EnsuredStreamInfo(
-        stream=stream_info_from_json(response.json()),
-        status=_ensure_status_from_headers(response.headers),
+        stream=stream_info_from_json(data),
+        status=_ensure_status_from_headers(headers),
     )
 
 
