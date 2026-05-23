@@ -71,6 +71,7 @@ class TestAccountOperations:
         finally:
             await s2.delete_basin(basin_name)
 
+    @pytest.mark.locations
     async def test_create_basin_with_location(self, s2: S2, basin_name: str):
         locations = await s2.list_locations()
         assert len(locations) > 0
@@ -88,6 +89,7 @@ class TestAccountOperations:
         finally:
             await s2.delete_basin(basin_name)
 
+    @pytest.mark.locations
     async def test_locations(self, s2: S2):
         locations = await s2.list_locations()
 
