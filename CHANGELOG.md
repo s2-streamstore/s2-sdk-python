@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.3.0...v0.3.1) (2026-05-23)
+
+
+### Documentation
+
+* add missing note block to `ensure_stream` op ([#59](https://github.com/s2-streamstore/s2-sdk-python/issues/59)) ([2ce5fef](https://github.com/s2-streamstore/s2-sdk-python/commit/2ce5fefb5d1aece49d2a46dbf945391387b412cd))
+
 ## [0.3.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.2.2...v0.3.0) (2026-05-21)
 
 
