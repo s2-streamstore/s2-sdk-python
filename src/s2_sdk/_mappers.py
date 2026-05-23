@@ -11,7 +11,6 @@ from s2_sdk._types import (
     AppendInput,
     BasinConfig,
     BasinInfo,
-    BasinScope,
     Encryption,
     EnsuredBasinInfo,
     EnsuredStreamInfo,
@@ -152,7 +151,7 @@ def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
     deleted_at = datetime.fromisoformat(deleted_at_str) if deleted_at_str else None
     return BasinInfo(
         name=data["name"],
-        scope=BasinScope(data["scope"]) if data.get("scope") else None,
+        location=data.get("location"),
         created_at=created_at,
         deleted_at=deleted_at,
     )

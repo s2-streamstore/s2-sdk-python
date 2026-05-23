@@ -107,8 +107,6 @@
 .. autoclass:: BasinConfig
     :members:
 
-.. autoenum:: BasinScope
-
 .. autoclass:: BasinInfo()
     :members:
 

@@ -48,6 +48,7 @@ from s2_sdk._validators import (
     validate_basin,
     validate_batching,
     validate_encryption_key,
+    validate_location,
     validate_max_unacked,
     validate_retry,
 )
@@ -166,12 +167,15 @@ class S2:
         name: str,
         *,
         config: types.BasinConfig | None = None,
+        location: str | None = None,
     ) -> types.BasinInfo:
         """Create a basin.
 
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
+            location: Location to create the basin in. If ``None``, uses the
+                service default location.
 
         Returns:
             Information about the created basin.
@@ -181,9 +185,13 @@ class S2:
             letters, numbers, and hyphens. It cannot begin or end with a hyphen.
         """
         validate_basin(name)
+        if location is not None:
+            validate_location(location)
         json: dict[str, Any] = {"basin": name}
         if config is not None:
             json["config"] = basin_config_to_json(config)
+        if location is not None:
+            json["location"] = location
 
         response = await self._retrier(
             self._account_client.unary_request,
@@ -196,7 +204,11 @@ class S2:
 
     @fallible
     async def ensure_basin(
-        self, name: str, *, config: types.BasinConfig | None = None
+        self,
+        name: str,
+        *,
+        config: types.BasinConfig | None = None,
+        location: str | None = None,
     ) -> types.EnsuredBasinInfo:
         """Ensure a basin.
 
@@ -210,6 +222,8 @@ class S2:
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
+            location: Location to create the basin in. If ``None``, uses the
+                service default location. This cannot be changed after creation.
 
         Returns:
             Information about the ensured basin.
@@ -219,9 +233,15 @@ class S2:
             letters, numbers, and hyphens. It cannot begin or end with a hyphen.
         """
         validate_basin(name)
-        json = None
-        if config is not None:
-            json = {"config": basin_config_to_json(config)}
+        json: dict[str, Any] | None = None
+        if location is not None:
+            validate_location(location)
+        if config is not None or location is not None:
+            json = {}
+            if config is not None:
+                json["config"] = basin_config_to_json(config)
+            if location is not None:
+                json["location"] = location
         response = await self._retrier(
             self._account_client.unary_request, "PUT", f"/v1/basins/{name}", json=json
         )

@@ -373,12 +373,6 @@ class TimestampingMode(_DocEnum):
     )
 
 
-class BasinScope(_DocEnum):
-    """Scope of a basin."""
-
-    AWS_US_EAST_1 = "aws:us-east-1", "AWS us-east-1 region."
-
-
 class Operation(_DocEnum):
     """Granular operation for access token scoping."""
 
@@ -504,8 +498,8 @@ class BasinInfo:
     name: str
     """Basin name."""
 
-    scope: BasinScope | None
-    """Scope of the basin. ``None`` for self-hosted (S2-Lite) basins."""
+    location: str | None
+    """Basin location. ``None`` for self-hosted (S2-Lite) basins."""
 
     created_at: datetime
     """Creation time."""
