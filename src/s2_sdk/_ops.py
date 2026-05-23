@@ -21,6 +21,7 @@ from s2_sdk._mappers import (
     basin_reconfiguration_to_json,
     ensured_basin_info_from_json_and_headers,
     ensured_stream_info_from_json_and_headers,
+    location_info_from_json,
     metric_set_from_json,
     read_batch_from_proto,
     read_limit_params,
@@ -174,8 +175,9 @@ class S2:
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
-            location: Location to create the basin in. If ``None``, uses the
-                service default location.
+            location: Basin location. If ``None``, the service uses the
+                account's default location. Use :meth:`list_locations` or
+                :meth:`get_default_location` to discover valid values.
 
         Returns:
             Information about the created basin.
@@ -222,8 +224,9 @@ class S2:
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
-            location: Location to create the basin in. If ``None``, uses the
-                service default location. This cannot be changed after creation.
+            location: Basin location. If ``None`` when creating, the service
+                uses the account's default location. Cannot be changed once the
+                basin exists.
 
         Returns:
             Information about the ensured basin.
@@ -334,6 +337,49 @@ class S2:
             if not page.has_more or not page.items:
                 break
             start_after = page.items[-1].name
+
+    @fallible
+    async def list_locations(self) -> list[types.LocationInfo]:
+        """List locations available to the account.
+
+        Returns:
+            Locations available to the account.
+        """
+        response = await self._retrier(
+            self._account_client.unary_request, "GET", "/v1/locations"
+        )
+        return [location_info_from_json(loc) for loc in response.json()]
+
+    @fallible
+    async def get_default_location(self) -> types.LocationInfo:
+        """Get the account's default location.
+
+        Returns:
+            The account's default location.
+        """
+        response = await self._retrier(
+            self._account_client.unary_request, "GET", "/v1/locations/default"
+        )
+        return location_info_from_json(response.json())
+
+    @fallible
+    async def set_default_location(self, location: str) -> types.LocationInfo:
+        """Set the account's default location.
+
+        Args:
+            location: Location name.
+
+        Returns:
+            The account's updated default location.
+        """
+        validate_location(location)
+        response = await self._retrier(
+            self._account_client.unary_request,
+            "PUT",
+            "/v1/locations/default",
+            json=location,
+        )
+        return location_info_from_json(response.json())
 
     @fallible
     async def delete_basin(self, name: str, *, ignore_not_found: bool = False) -> None:

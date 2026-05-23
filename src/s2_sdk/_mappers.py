@@ -18,6 +18,7 @@ from s2_sdk._types import (
     ExactMatch,
     Gauge,
     Label,
+    LocationInfo,
     MetricUnit,
     Operation,
     OperationGroupPermissions,
@@ -80,6 +81,13 @@ def basin_config_from_json(data: dict[str, Any]) -> BasinConfig:
 
 def basin_reconfiguration_to_json(config: BasinConfig) -> dict[str, Any]:
     return basin_config_to_json(config) or {}
+
+
+def location_info_from_json(data: dict[str, Any]) -> LocationInfo:
+    return LocationInfo(
+        name=data["name"],
+        is_private=data["is_private"],
+    )
 
 
 def stream_config_to_json(config: StreamConfig | None) -> dict[str, Any] | None:

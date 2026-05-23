@@ -349,6 +349,23 @@ class Page(Generic[T]):
     """Whether there are more pages."""
 
 
+@dataclass(slots=True)
+class LocationInfo:
+    """Service-defined basin placement location.
+
+    Locations determine where newly created basins live. Private locations are
+    restricted to accounts configured for access.
+
+    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_.
+    """
+
+    name: str
+    """Location name."""
+
+    is_private: bool
+    """Whether this location is an account-private placement."""
+
+
 class StorageClass(_DocEnum):
     """Storage class for recent appends."""
 
@@ -397,6 +414,9 @@ class Operation(_DocEnum):
     ACCOUNT_METRICS = "account-metrics"
     BASIN_METRICS = "basin-metrics"
     STREAM_METRICS = "stream-metrics"
+    LIST_LOCATIONS = "list-locations"
+    GET_DEFAULT_LOCATION = "get-default-location"
+    SET_DEFAULT_LOCATION = "set-default-location"
 
 
 class Permission(_DocEnum):
@@ -499,7 +519,10 @@ class BasinInfo:
     """Basin name."""
 
     location: str | None
-    """Basin location. ``None`` for self-hosted (S2-Lite) basins."""
+    """Basin location, if returned by the service.
+
+    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_.
+    """
 
     created_at: datetime
     """Creation time."""
