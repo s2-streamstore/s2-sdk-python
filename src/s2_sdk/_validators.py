@@ -17,6 +17,12 @@ def validate_basin(name: str) -> None:
     raise S2ClientError(f"Invalid basin name: {name}")
 
 
+def validate_location(name: str) -> None:
+    if isinstance(name, str) and 1 <= len(name) <= 64:
+        return
+    raise S2ClientError(f"Invalid location name: {name}")
+
+
 def validate_max_unacked(max_bytes: int, max_batches: int | None = None) -> None:
     if max_bytes < ONE_MIB:
         raise S2ClientError(

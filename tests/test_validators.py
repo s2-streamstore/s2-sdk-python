@@ -2,7 +2,7 @@ import pytest
 
 from s2_sdk import CommandRecord, Record, S2ClientError
 from s2_sdk._types import metered_bytes
-from s2_sdk._validators import validate_append_input
+from s2_sdk._validators import validate_append_input, validate_location
 
 
 def test_append_record_batch_rejects_empty():
@@ -25,3 +25,17 @@ def test_append_record_rejects_too_large():
 def test_fencing_token_rejects_too_long():
     with pytest.raises(S2ClientError):
         CommandRecord.fence("a" * 37)
+
+
+def test_location_accepts_name():
+    validate_location("aws:us-east-1")
+
+
+def test_location_rejects_empty():
+    with pytest.raises(S2ClientError):
+        validate_location("")
+
+
+def test_location_rejects_too_long():
+    with pytest.raises(S2ClientError):
+        validate_location("a" * 65)

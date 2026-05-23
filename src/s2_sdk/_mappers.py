@@ -11,7 +11,6 @@ from s2_sdk._types import (
     AppendInput,
     BasinConfig,
     BasinInfo,
-    BasinScope,
     Encryption,
     EnsuredBasinInfo,
     EnsuredStreamInfo,
@@ -19,6 +18,7 @@ from s2_sdk._types import (
     ExactMatch,
     Gauge,
     Label,
+    LocationInfo,
     MetricUnit,
     Operation,
     OperationGroupPermissions,
@@ -81,6 +81,13 @@ def basin_config_from_json(data: dict[str, Any]) -> BasinConfig:
 
 def basin_reconfiguration_to_json(config: BasinConfig) -> dict[str, Any]:
     return basin_config_to_json(config) or {}
+
+
+def location_info_from_json(data: dict[str, Any]) -> LocationInfo:
+    return LocationInfo(
+        name=data["name"],
+        is_private=data["is_private"],
+    )
 
 
 def stream_config_to_json(config: StreamConfig | None) -> dict[str, Any] | None:
@@ -152,7 +159,7 @@ def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
     deleted_at = datetime.fromisoformat(deleted_at_str) if deleted_at_str else None
     return BasinInfo(
         name=data["name"],
-        scope=BasinScope(data["scope"]) if data.get("scope") else None,
+        location=data.get("location"),
         created_at=created_at,
         deleted_at=deleted_at,
     )

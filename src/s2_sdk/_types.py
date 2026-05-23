@@ -349,6 +349,26 @@ class Page(Generic[T]):
     """Whether there are more pages."""
 
 
+@dataclass(slots=True)
+class LocationInfo:
+    """Logical location of a basin.
+
+    A basin's location is fixed for the lifetime of the basin. Public locations
+    represent multi-tenant S2 deployments within public cloud regions, for
+    example ``"aws:us-east-1"``. Private locations represent single-tenant S2
+    deployments, restricted to accounts with access.
+
+    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_ for
+    more.
+    """
+
+    name: str
+    """Location name."""
+
+    is_private: bool
+    """Whether this location is an account-private placement."""
+
+
 class StorageClass(_DocEnum):
     """Storage class for recent appends."""
 
@@ -371,12 +391,6 @@ class TimestampingMode(_DocEnum):
         "arrival",
         "Use the arrival time and ignore any client-specified timestamp.",
     )
-
-
-class BasinScope(_DocEnum):
-    """Scope of a basin."""
-
-    AWS_US_EAST_1 = "aws:us-east-1", "AWS us-east-1 region."
 
 
 class Operation(_DocEnum):
@@ -403,6 +417,9 @@ class Operation(_DocEnum):
     ACCOUNT_METRICS = "account-metrics"
     BASIN_METRICS = "basin-metrics"
     STREAM_METRICS = "stream-metrics"
+    LIST_LOCATIONS = "list-locations"
+    GET_DEFAULT_LOCATION = "get-default-location"
+    SET_DEFAULT_LOCATION = "set-default-location"
 
 
 class Permission(_DocEnum):
@@ -504,8 +521,12 @@ class BasinInfo:
     name: str
     """Basin name."""
 
-    scope: BasinScope | None
-    """Scope of the basin. ``None`` for self-hosted (S2-Lite) basins."""
+    location: str | None
+    """Logical location of the basin, if returned by the service.
+
+    A basin's location is fixed for the lifetime of the basin. See
+    `basin locations <https://s2.dev/docs/concepts/basins#location>`_ for more.
+    """
 
     created_at: datetime
     """Creation time."""

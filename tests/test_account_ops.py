@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -69,6 +70,61 @@ class TestAccountOperations:
             assert retrieved_config.create_stream_on_append is True
         finally:
             await s2.delete_basin(basin_name)
+
+    @pytest.mark.locations
+    async def test_create_basin_with_location(self, s2: S2, basin_name: str):
+        locations = await s2.list_locations()
+        assert len(locations) > 0
+
+        location = random.choice(locations)
+
+        basin_info = await s2.create_basin(
+            name=basin_name,
+            location=location.name,
+        )
+
+        try:
+            assert basin_info.name == basin_name
+            assert basin_info.location == location.name
+        finally:
+            await s2.delete_basin(basin_name)
+
+    @pytest.mark.locations
+    async def test_locations(self, s2: S2):
+        locations = await s2.list_locations()
+
+        assert len(locations) > 0
+        for location in locations:
+            assert location.name
+            assert isinstance(location.is_private, bool)
+
+        default_location = await s2.get_default_location()
+        assert default_location.name
+        assert isinstance(default_location.is_private, bool)
+        assert default_location.name in {location.name for location in locations}
+
+        target_location = next(
+            (
+                location
+                for location in locations
+                if location.name != default_location.name
+            ),
+            locations[0],
+        )
+
+        try:
+            updated_default = await s2.set_default_location(target_location.name)
+            assert updated_default.name == target_location.name
+            assert updated_default.is_private == target_location.is_private
+
+            confirmed_default = await s2.get_default_location()
+            assert confirmed_default.name == target_location.name
+            assert confirmed_default.is_private == target_location.is_private
+        finally:
+            if target_location.name != default_location.name:
+                restored_default = await s2.set_default_location(default_location.name)
+                assert restored_default.name == default_location.name
+                assert restored_default.is_private == default_location.is_private
 
     async def test_reconfigure_basin(self, s2: S2, basin: S2Basin):
         config = BasinConfig(
