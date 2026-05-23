@@ -175,8 +175,9 @@ class S2:
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
-            location: Basin location. If ``None``, the service uses the
-                account's default location. Use :meth:`list_locations` or
+            location: Logical location for the basin. If ``None``, the service
+                uses the account's default location. The location is fixed for
+                the lifetime of the basin. Use :meth:`list_locations` or
                 :meth:`get_default_location` to discover valid values.
 
         Returns:
@@ -224,9 +225,9 @@ class S2:
         Args:
             name: Name of the basin.
             config: Configuration for the basin.
-            location: Basin location. If ``None`` when creating, the service
-                uses the account's default location. Cannot be changed once the
-                basin exists.
+            location: Logical location for the basin. If ``None`` when
+                creating, the service uses the account's default location. The
+                location is fixed for the lifetime of the basin.
 
         Returns:
             Information about the ensured basin.

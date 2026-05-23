@@ -351,12 +351,15 @@ class Page(Generic[T]):
 
 @dataclass(slots=True)
 class LocationInfo:
-    """Service-defined basin placement location.
+    """Logical location of a basin.
 
-    Locations determine where newly created basins live. Private locations are
-    restricted to accounts configured for access.
+    A basin's location is fixed for the lifetime of the basin. Public locations
+    represent multi-tenant S2 deployments within public cloud regions, for
+    example ``"aws:us-east-1"``. Private locations represent single-tenant S2
+    deployments, restricted to accounts with access.
 
-    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_.
+    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_ for
+    more.
     """
 
     name: str
@@ -519,9 +522,10 @@ class BasinInfo:
     """Basin name."""
 
     location: str | None
-    """Basin location, if returned by the service.
+    """Logical location of the basin, if returned by the service.
 
-    See `basin locations <https://s2.dev/docs/concepts/basins#location>`_.
+    A basin's location is fixed for the lifetime of the basin. See
+    `basin locations <https://s2.dev/docs/concepts/basins#location>`_ for more.
     """
 
     created_at: datetime
