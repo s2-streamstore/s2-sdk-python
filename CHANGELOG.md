@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.4.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.3.1...v0.4.0) (2026-05-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* add `location` ops, replace `BasinScope` with `LocationInfo` ([#61](https://github.com/s2-streamstore/s2-sdk-python/issues/61))
+
+### Features
+
+* add `location` ops, replace `BasinScope` with `LocationInfo` ([#61](https://github.com/s2-streamstore/s2-sdk-python/issues/61)) ([d1157ad](https://github.com/s2-streamstore/s2-sdk-python/commit/d1157adb1471dbba6abdc1c6a495cfac204d6c4e))
+
 ## [0.3.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.3.0...v0.3.1) (2026-05-23)
 
 
