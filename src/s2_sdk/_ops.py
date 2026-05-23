@@ -677,6 +677,11 @@ class S2Basin:
 
         Returns:
             Information about the ensured stream.
+
+        Note:
+            ``name`` must be unique within the basin. It can be an arbitrary string
+            up to 512 characters. ``/`` is recommended as a delimiter for
+            hierarchical naming.
         """
         json = stream_config_to_json(config)
         response = await self._retrier(
