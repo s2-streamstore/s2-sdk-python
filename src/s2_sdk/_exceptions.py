@@ -157,15 +157,33 @@ class ProtocolError(TransportError):
         super().__init__(message)
 
 
+def maybe_unwrap_exception_group(e: BaseException) -> BaseException:
+    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:
+        e = e.exceptions[0]
+    return e
+
+
+def normalize_exception(exc: Exception) -> S2Error:
+    e = maybe_unwrap_exception_group(exc)
+
+    if isinstance(e, S2Error):
+        return e
+    assert isinstance(e, Exception)
+    client_error = S2ClientError(e)
+    client_error.__cause__ = e
+    return client_error
+
+
 def fallible(f):
     @wraps(f)
     def sync_wrapper(*args, **kwargs):
         try:
             return f(*args, **kwargs)
         except Exception as e:
-            if isinstance(e, S2Error):
-                raise e
-            raise S2ClientError(e) from e
+            normalized = normalize_exception(e)
+            if normalized is e:
+                raise
+            raise normalized from e
 
     @wraps(f)
     async def async_gen_wrapper(*args, **kwargs):
@@ -173,18 +191,20 @@ def fallible(f):
             async for val in f(*args, **kwargs):
                 yield val
         except Exception as e:
-            if isinstance(e, S2Error):
-                raise e
-            raise S2ClientError(e) from e
+            normalized = normalize_exception(e)
+            if normalized is e:
+                raise
+            raise normalized from e
 
     @wraps(f)
     async def coro_wrapper(*args, **kwargs):
         try:
             return await f(*args, **kwargs)
         except Exception as e:
-            if isinstance(e, S2Error):
-                raise e
-            raise S2ClientError(e) from e
+            normalized = normalize_exception(e)
+            if normalized is e:
+                raise
+            raise normalized from e
 
     if iscoroutinefunction(f):
         return coro_wrapper

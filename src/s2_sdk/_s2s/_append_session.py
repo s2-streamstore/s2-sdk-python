@@ -1,8 +1,9 @@
 import asyncio
 import logging
 from collections import deque
-from collections.abc import AsyncGenerator, AsyncIterable
-from typing import NamedTuple
+from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
+from dataclasses import dataclass
+from typing import Any
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
@@ -32,9 +33,11 @@ logger = logging.getLogger(__name__)
 _QUEUE_MAX_SIZE = 100
 
 
-class _InflightInput(NamedTuple):
+@dataclass(slots=True)
+class _InflightInput:
     num_records: int
     encoded: bytes
+    ack_deadline: float | None = None
 
 
 async def run_append_session(
@@ -43,7 +46,7 @@ async def run_append_session(
     inputs: AsyncIterable[AppendInput],
     retry: Retry,
     compression: Compression,
-    ack_timeout: float | None = None,
+    ack_timeout: float,
     encryption_key: str | None = None,
 ) -> AsyncIterable[AppendAck]:
     input_queue: asyncio.Queue[AppendInput | None] = asyncio.Queue(
@@ -71,7 +74,7 @@ async def run_append_session(
         try:
             while True:
                 try:
-                    pending_resend = tuple(inflight_inputs)
+                    resend_inputs = tuple(inflight_inputs)
                     if frame_signal is not None:
                         frame_signal.reset()
                     await _run_attempt(
@@ -81,7 +84,7 @@ async def run_append_session(
                         inflight_inputs,
                         input_queue,
                         ack_queue,
-                        pending_resend,
+                        resend_inputs,
                         compression,
                         frame_signal,
                         ack_timeout,
@@ -89,11 +92,10 @@ async def run_append_session(
                     )
                     return
                 except Exception as e:
-                    has_inflight = len(inflight_inputs) > 0
                     if attempt.value < max_retries and is_safe_to_retry_session(
                         e,
                         retry.append_retry_policy,
-                        has_inflight,
+                        bool(inflight_inputs),
                         frame_signal,
                     ):
                         backoff = compute_backoff(
@@ -136,10 +138,10 @@ async def _run_attempt(
     inflight_inputs: deque[_InflightInput],
     input_queue: asyncio.Queue[AppendInput | None],
     ack_queue: asyncio.Queue[AppendAck | None],
-    pending_resend: tuple[_InflightInput, ...],
+    resend_inputs: tuple[_InflightInput, ...],
     compression: Compression,
     frame_signal: FrameSignal | None,
-    ack_timeout: float | None = None,
+    ack_timeout: float,
     encryption_key: str | None = None,
 ) -> None:
     headers = {
@@ -149,11 +151,22 @@ async def _run_attempt(
     if encryption_key is not None:
         headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
 
+    ack_deadline_armed = asyncio.Event()
+    for resend_inp in resend_inputs:
+        resend_inp.ack_deadline = None
+
     async with client.streaming_request(
         "POST",
         _stream_records_path(stream_name),
         headers=headers,
-        content=_body_gen(inflight_inputs, input_queue, pending_resend, compression),
+        content=_body_gen(
+            inflight_inputs,
+            input_queue,
+            resend_inputs,
+            compression,
+            ack_deadline_armed,
+            ack_timeout,
+        ),
         frame_signal=frame_signal,
     ) as response:
         if response.status_code != 200:
@@ -161,30 +174,29 @@ async def _run_attempt(
             raise parse_error_info(body, response.status_code)
 
         prev_ack_end: int | None = None
-        resend_remaining = len(pending_resend)
+        resend_remaining = len(resend_inputs)
 
         messages = read_messages(response.aiter_bytes())
         while True:
             try:
-                msg_body = await asyncio.wait_for(
-                    messages.__anext__(), timeout=ack_timeout
+                ack = await _read_ack(
+                    messages,
+                    inflight_inputs,
+                    ack_deadline_armed,
                 )
             except StopAsyncIteration:
                 break
-            except asyncio.TimeoutError:
-                raise ReadTimeoutError("Append session ack timeout")
 
             if attempt.value > 0:
                 attempt.value = 0
-            ack = pb.AppendAck()
-            ack.ParseFromString(msg_body)
-
             if ack.end.seq_num < ack.start.seq_num:
                 raise S2ClientError("Invalid ack: end < start")
             if prev_ack_end is not None and ack.end.seq_num <= prev_ack_end:
                 raise S2ClientError("Invalid ack: not monotonically increasing")
             prev_ack_end = ack.end.seq_num
 
+            if not inflight_inputs:
+                raise S2ClientError("Invalid ack: no inflight append")
             num_records_sent = inflight_inputs.popleft().num_records
             num_records_ackd = ack.end.seq_num - ack.start.seq_num
             if num_records_sent != num_records_ackd:
@@ -198,7 +210,7 @@ async def _run_attempt(
                 if (
                     resend_remaining == 0
                     and frame_signal is not None
-                    and len(inflight_inputs) == 0
+                    and not inflight_inputs
                 ):
                     frame_signal.reset()
 
@@ -209,22 +221,71 @@ async def _run_attempt(
             )
 
 
+async def _read_ack(
+    messages: AsyncIterator[bytes],
+    inflight_inputs: deque[_InflightInput],
+    deadline_armed: asyncio.Event,
+) -> pb.AppendAck:
+    def parse_ack(msg_body: bytes) -> pb.AppendAck:
+        ack = pb.AppendAck()
+        ack.ParseFromString(msg_body)
+        return ack
+
+    next_msg_fut: asyncio.Future[Any] | None = None
+    deadline_armed_waiter: asyncio.Future[Any] | None = None
+    try:
+        while True:
+            deadline = inflight_inputs[0].ack_deadline if inflight_inputs else None
+            if deadline is not None:
+                try:
+                    async with asyncio.timeout_at(deadline):
+                        if next_msg_fut is not None:
+                            msg_body = await next_msg_fut
+                        else:
+                            msg_body = await messages.__anext__()
+                        return parse_ack(msg_body)
+                except TimeoutError:
+                    raise ReadTimeoutError("Append session ack timeout") from None
+
+            if next_msg_fut is None:
+                next_msg_fut = asyncio.ensure_future(messages.__anext__())
+            deadline_armed.clear()
+            deadline_armed_waiter = asyncio.create_task(deadline_armed.wait())
+            done, _ = await asyncio.wait(
+                {next_msg_fut, deadline_armed_waiter},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if deadline_armed_waiter not in done:
+                deadline_armed_waiter.cancel()
+            if next_msg_fut in done:
+                return parse_ack(next_msg_fut.result())
+    finally:
+        if next_msg_fut is not None and not next_msg_fut.done():
+            next_msg_fut.cancel()
+        if deadline_armed_waiter is not None and not deadline_armed_waiter.done():
+            deadline_armed_waiter.cancel()
+
+
 async def _body_gen(
     inflight_inputs: deque[_InflightInput],
     input_queue: asyncio.Queue[AppendInput | None],
-    pending_resend: tuple[_InflightInput, ...],
+    resend_inputs: tuple[_InflightInput, ...],
     compression: Compression,
+    ack_deadline_armed: asyncio.Event,
+    ack_timeout: float,
 ) -> AsyncGenerator[bytes]:
-    if pending_resend:
+    loop = asyncio.get_running_loop()
+    if resend_inputs:
         logger.debug(
-            "resending inflight appends: count=%d bytes=%d",
-            len(pending_resend),
-            sum(len(inp.encoded) for inp in pending_resend),
+            "resending unacknowledged appends: count=%d bytes=%d",
+            len(resend_inputs),
+            sum(len(inp.encoded) for inp in resend_inputs),
         )
-    for resend_inp in pending_resend:
-        yield resend_inp.encoded
-    if pending_resend:
-        logger.debug("finished resending inflight appends")
+        for resend_inp in resend_inputs:
+            resend_inp.ack_deadline = loop.time() + ack_timeout
+            ack_deadline_armed.set()
+            yield resend_inp.encoded
+        logger.debug("finished resending unacknowledged appends")
 
     while True:
         inp = await input_queue.get()
@@ -232,9 +293,15 @@ async def _body_gen(
             await input_queue.put(None)
             return
         encoded = _encode_input(inp, compression)
+        ack_deadline = loop.time() + ack_timeout
         inflight_inputs.append(
-            _InflightInput(num_records=len(inp.records), encoded=encoded)
+            _InflightInput(
+                num_records=len(inp.records),
+                encoded=encoded,
+                ack_deadline=ack_deadline,
+            )
         )
+        ack_deadline_armed.set()
         yield encoded
 
 
