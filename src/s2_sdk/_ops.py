@@ -253,6 +253,7 @@ class S2:
             response.json(), response.headers
         )
 
+    @fallible
     def basin(self, name: str) -> "S2Basin":
         """Get an :class:`S2Basin` for performing basin-level operations.
 
@@ -758,6 +759,7 @@ class S2Basin:
             response.json(), response.headers
         )
 
+    @fallible
     def stream(
         self,
         name: str,
@@ -1021,6 +1023,7 @@ class S2Stream:
         ack.ParseFromString(response.content)
         return append_ack_from_proto(ack)
 
+    @fallible
     def append_session(
         self,
         *,
@@ -1062,6 +1065,7 @@ class S2Stream:
             encryption_key=self._encryption_key,
         )
 
+    @fallible
     def producer(
         self,
         *,
