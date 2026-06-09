@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.0...v0.4.1) (2026-06-09)
+
+
+### Bug Fixes
+
+* missing `[@fallible](https://github.com/fallible)` decorator for public methods in `ops` mod ([#71](https://github.com/s2-streamstore/s2-sdk-python/issues/71)) ([74d7c70](https://github.com/s2-streamstore/s2-sdk-python/commit/74d7c70c7ca3aaaa7f4538dd5e3d9840f55f6e38))
+* missing check for unexpected response stream close in append session  ([#74](https://github.com/s2-streamstore/s2-sdk-python/issues/74)) ([1d68ddf](https://github.com/s2-streamstore/s2-sdk-python/commit/1d68ddf22a3eaa4c6b2fbd0826d46b70435a5161))
+
 ## [0.4.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.3.1...v0.4.0) (2026-05-23)
 
 
