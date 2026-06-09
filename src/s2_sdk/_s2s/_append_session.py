@@ -202,6 +202,12 @@ async def _run_attempt(
                 ):
                     frame_signal.reset()
 
+        if inflight_inputs:
+            raise S2ClientError(
+                f"Append session response stream closed with {len(inflight_inputs)} "
+                "unacknowledged batches"
+            )
+
 
 async def _body_gen(
     inflight_inputs: deque[_InflightInput],
