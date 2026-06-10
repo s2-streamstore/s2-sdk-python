@@ -944,11 +944,11 @@ class TestEncryption:
                         await stream.append(
                             AppendInput(records=[Record(body=b"hello")])
                         )
-                    assert append_exc.value.code == "invalid"
+                    assert append_exc.value.code == "bad_header"
                     assert cipher.value in str(append_exc.value)
                     with pytest.raises(S2ServerError) as read_exc:
                         await stream.read(start=SeqNum(0))
-                    assert read_exc.value.code == "invalid"
+                    assert read_exc.value.code == "bad_header"
                     assert cipher.value in str(read_exc.value)
                 finally:
                     await basin.delete_stream(stream_name)
