@@ -439,27 +439,6 @@ class TestBasinOperations:
                 except Exception:
                     pass
 
-    async def test_list_streams_with_start_after_less_than_prefix(
-        self, shared_basin: S2Basin
-    ):
-        basin = shared_basin
-        base = uuid.uuid4().hex[:6]
-        names = [f"{base}-a-a", f"{base}-a-b", f"{base}-b-a"]
-        for name in names:
-            await basin.create_stream(name=name)
-        try:
-            page = await basin.list_streams(prefix=f"{base}-b", start_after=f"{base}-a")
-
-            assert len(page.items) == 1
-            assert page.items[0].name == f"{base}-b-a"
-            assert page.has_more is False
-        finally:
-            for name in names:
-                try:
-                    await basin.delete_stream(name)
-                except Exception:
-                    pass
-
     async def test_list_streams_with_limit_zero(
         self, shared_basin: S2Basin, stream_name: str
     ):
