@@ -439,7 +439,7 @@ class TestBasinOperations:
                 except Exception:
                     pass
 
-    async def test_list_streams_with_start_after_less_than_prefix_errors(
+    async def test_list_streams_with_start_after_less_than_prefix(
         self, shared_basin: S2Basin
     ):
         basin = shared_basin
@@ -448,8 +448,11 @@ class TestBasinOperations:
         for name in names:
             await basin.create_stream(name=name)
         try:
-            with pytest.raises(S2ServerError):
-                await basin.list_streams(prefix=f"{base}-b", start_after=f"{base}-a")
+            page = await basin.list_streams(prefix=f"{base}-b", start_after=f"{base}-a")
+
+            assert len(page.items) == 1
+            assert page.items[0].name == f"{base}-b-a"
+            assert page.has_more is False
         finally:
             for name in names:
                 try:
