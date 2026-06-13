@@ -157,6 +157,12 @@ class ProtocolError(TransportError):
         super().__init__(message)
 
 
+def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
+    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:
+        e = e.exceptions[0]
+    return e
+
+
 def normalize_exception(e: BaseException) -> BaseException:
     e = _maybe_unwrap_exception_group(e)
 
@@ -170,16 +176,20 @@ def normalize_exception(e: BaseException) -> BaseException:
     return client_error
 
 
+def _raise_normalized_exception(e: Exception):
+    normalized = normalize_exception(e)
+    if normalized is e:
+        raise
+    raise normalized from e
+
+
 def fallible(f):
     @wraps(f)
     def sync_wrapper(*args, **kwargs):
         try:
             return f(*args, **kwargs)
         except Exception as e:
-            normalized = normalize_exception(e)
-            if normalized is e:
-                raise
-            raise normalized from e
+            _raise_normalized_exception(e)
 
     @wraps(f)
     async def async_gen_wrapper(*args, **kwargs):
@@ -187,20 +197,14 @@ def fallible(f):
             async for val in f(*args, **kwargs):
                 yield val
         except Exception as e:
-            normalized = normalize_exception(e)
-            if normalized is e:
-                raise
-            raise normalized from e
+            _raise_normalized_exception(e)
 
     @wraps(f)
     async def coro_wrapper(*args, **kwargs):
         try:
             return await f(*args, **kwargs)
         except Exception as e:
-            normalized = normalize_exception(e)
-            if normalized is e:
-                raise
-            raise normalized from e
+            _raise_normalized_exception(e)
 
     if iscoroutinefunction(f):
         return coro_wrapper
@@ -208,9 +212,3 @@ def fallible(f):
         return async_gen_wrapper
     else:
         return sync_wrapper
-
-
-def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
-    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:
-        e = e.exceptions[0]
-    return e
