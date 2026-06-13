@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.1...v0.4.2) (2026-06-13)
+
+
+### Bug Fixes
+
+* incorrect ack deadline semantics in append session  ([#64](https://github.com/s2-streamstore/s2-sdk-python/issues/64)) ([248e5c0](https://github.com/s2-streamstore/s2-sdk-python/commit/248e5c0b1a2776edcd59783826feee34842651d8))
+* unawaited `asyncio.Task` cancellations  ([#78](https://github.com/s2-streamstore/s2-sdk-python/issues/78)) ([4d4ac80](https://github.com/s2-streamstore/s2-sdk-python/commit/4d4ac8022ec4b773dff506b0f0cbec220906ec67))
+
 ## [0.4.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.0...v0.4.1) (2026-06-09)
 
 
