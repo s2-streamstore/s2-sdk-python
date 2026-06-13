@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from typing import AsyncIterable
 
 from s2_sdk._types import AppendInput, Batching, Record, metered_bytes
@@ -51,13 +52,13 @@ async def append_record_batches(
     acc = BatchAccumulator(batching)
     linger_secs = batching.linger.total_seconds()
     record_iter = records.__aiter__()
-    pending_next = None
+    next_record_task = None
 
     try:
         while True:
-            if pending_next is not None:
-                record = await pending_next
-                pending_next = None
+            if next_record_task is not None:
+                record = await next_record_task
+                next_record_task = None
             else:
                 record = await anext(record_iter, None)
             if record is None:
@@ -75,12 +76,12 @@ async def append_record_batches(
                     remaining = deadline - asyncio.get_running_loop().time()
                     if remaining <= 0:
                         break
-                    next_task = asyncio.create_task(anext(record_iter, None))
-                    done, _ = await asyncio.wait({next_task}, timeout=remaining)
+                    next_record_task = asyncio.create_task(anext(record_iter, None))
+                    done, _ = await asyncio.wait({next_record_task}, timeout=remaining)
                     if not done:
-                        pending_next = next_task
                         break
-                    record = next_task.result()
+                    record = next_record_task.result()
+                    next_record_task = None
                 else:
                     record = await anext(record_iter, None)
                 if record is None:
@@ -93,8 +94,10 @@ async def append_record_batches(
             yield acc.take()
         raise
     finally:
-        if pending_next is not None:
-            pending_next.cancel()
+        if next_record_task is not None and not next_record_task.done():
+            next_record_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await next_record_task
 
 
 async def append_inputs(

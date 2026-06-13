@@ -2,6 +2,7 @@ import asyncio
 import logging
 from collections import deque
 from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -231,39 +232,48 @@ async def _read_ack(
         ack.ParseFromString(msg_body)
         return ack
 
-    next_msg_fut: asyncio.Future[Any] | None = None
-    deadline_armed_waiter: asyncio.Future[Any] | None = None
+    next_msg_task: asyncio.Task[Any] | None = None
+    deadline_armed_waiter_task: asyncio.Task[Any] | None = None
     try:
         while True:
             deadline = inflight_inputs[0].ack_deadline if inflight_inputs else None
             if deadline is not None:
                 try:
                     async with asyncio.timeout_at(deadline):
-                        if next_msg_fut is not None:
-                            msg_body = await next_msg_fut
+                        if next_msg_task is not None:
+                            msg_body = await next_msg_task
                         else:
                             msg_body = await messages.__anext__()
                         return parse_ack(msg_body)
                 except TimeoutError:
                     raise ReadTimeoutError("Append session ack timeout") from None
 
-            if next_msg_fut is None:
-                next_msg_fut = asyncio.ensure_future(messages.__anext__())
+            if next_msg_task is None:
+                next_msg_task = asyncio.ensure_future(messages.__anext__())
             deadline_armed.clear()
-            deadline_armed_waiter = asyncio.create_task(deadline_armed.wait())
+            deadline_armed_waiter_task = asyncio.create_task(deadline_armed.wait())
             done, _ = await asyncio.wait(
-                {next_msg_fut, deadline_armed_waiter},
+                {next_msg_task, deadline_armed_waiter_task},
                 return_when=asyncio.FIRST_COMPLETED,
             )
-            if deadline_armed_waiter not in done:
-                deadline_armed_waiter.cancel()
-            if next_msg_fut in done:
-                return parse_ack(next_msg_fut.result())
+            if deadline_armed_waiter_task not in done:
+                deadline_armed_waiter_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await deadline_armed_waiter_task
+            if next_msg_task in done:
+                return parse_ack(next_msg_task.result())
     finally:
-        if next_msg_fut is not None and not next_msg_fut.done():
-            next_msg_fut.cancel()
-        if deadline_armed_waiter is not None and not deadline_armed_waiter.done():
-            deadline_armed_waiter.cancel()
+        if next_msg_task is not None and not next_msg_task.done():
+            next_msg_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await next_msg_task
+        if (
+            deadline_armed_waiter_task is not None
+            and not deadline_armed_waiter_task.done()
+        ):
+            deadline_armed_waiter_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await deadline_armed_waiter_task
 
 
 async def _body_gen(

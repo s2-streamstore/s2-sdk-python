@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Self
 
@@ -137,8 +138,11 @@ class Producer:
             return
 
         if self._linger_task is not None:
-            self._linger_task.cancel()
+            linger_task = self._linger_task
             self._linger_task = None
+            linger_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await linger_task
 
         records = self._accumulator.take()
         indexed_ack_futs = tuple(self._indexed_ack_futs)

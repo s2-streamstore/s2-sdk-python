@@ -3,6 +3,7 @@ import base64
 import os
 import time
 import uuid
+from contextlib import suppress
 from datetime import timedelta
 
 import pytest
@@ -728,7 +729,7 @@ class TestStreamOperations:
             await asyncio.sleep(1)
             await stream.append(AppendInput(records=[Record(body=b"new")]))
 
-        task = asyncio.create_task(append_later())
+        append_later_task = asyncio.create_task(append_later())
         received = []
         try:
             with pytest.raises(asyncio.TimeoutError):
@@ -736,7 +737,9 @@ class TestStreamOperations:
                     async for batch in stream.read_session(start=SeqNum(0)):
                         received.extend(batch.records)
         finally:
-            task.cancel()
+            append_later_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await append_later_task
         assert len(received) == 1
         assert received[0].body == b"new"
 
