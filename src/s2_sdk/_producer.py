@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Self
 
@@ -43,7 +44,9 @@ class Producer:
         "_closed",
         "_drain_task",
         "_error",
+        "_final_flush_done",
         "_fencing_token",
+        "_flush_lock",
         "_linger_task",
         "_match_seq_num",
         "_unacked",
@@ -76,11 +79,13 @@ class Producer:
         self._accumulator = BatchAccumulator(batching)
 
         self._indexed_ack_futs: list[asyncio.Future[IndexedAppendAck]] = []
+        self._flush_lock = asyncio.Lock()
         self._linger_task: asyncio.Task[None] | None = None
         self._unacked: deque[_UnackedBatch] = deque()
         self._batch_ready = asyncio.Event()
         self._drain_task = asyncio.get_running_loop().create_task(self._drain_acks())
         self._closed = False
+        self._final_flush_done = False
         self._error: BaseException | None = None
 
     @fallible
@@ -94,9 +99,8 @@ class Producer:
         if self._error is not None:
             raise self._error
 
-        ack_fut: asyncio.Future[IndexedAppendAck] = (
-            asyncio.get_running_loop().create_future()
-        )
+        loop = asyncio.get_running_loop()
+        ack_fut: asyncio.Future[IndexedAppendAck] = loop.create_future()
         self._indexed_ack_futs.append(ack_fut)
 
         first_in_batch = self._accumulator.is_empty()
@@ -104,9 +108,7 @@ class Producer:
         if self._accumulator.is_full():
             await self._flush()
         elif first_in_batch and self._accumulator.linger > 0:
-            self._linger_task = asyncio.get_running_loop().create_task(
-                self._linger_flush()
-            )
+            self._linger_task = loop.create_task(self._flush_after_linger())
 
         return RecordSubmitTicket(ack_fut)
 
@@ -120,6 +122,7 @@ class Producer:
             await self._flush()
             await self._session.close()
         finally:
+            self._final_flush_done = True
             self._batch_ready.set()
             await self._drain_task
         if self._error is not None:
@@ -133,48 +136,60 @@ class Producer:
         return False
 
     async def _flush(self) -> None:
-        if self._accumulator.is_empty():
+        await self._cancel_linger_task()
+        await self._submit_accumulated_records()
+
+    async def _submit_accumulated_records(self) -> None:
+        async with self._flush_lock:
+            if self._accumulator.is_empty():
+                return
+
+            records = self._accumulator.take()
+            indexed_ack_futs = tuple(self._indexed_ack_futs)
+            self._indexed_ack_futs.clear()
+
+            batch = AppendInput(
+                records=records,
+                fencing_token=self._fencing_token,
+                match_seq_num=self._match_seq_num,
+            )
+            if self._match_seq_num is not None:
+                self._match_seq_num += len(records)
+
+            try:
+                ticket = await self._session.submit(batch)
+            except BaseException as e:
+                e = normalize_exception(e)
+                self._error = e
+                for ack_fut in indexed_ack_futs:
+                    if not ack_fut.done():
+                        ack_fut.set_exception(e)
+                        # Suppress "Future exception was never retrieved" for
+                        # futures the caller never got back (submit raised).
+                        ack_fut.exception()
+                raise e
+
+            self._unacked.append(
+                _UnackedBatch(ticket=ticket, indexed_ack_futs=indexed_ack_futs)
+            )
+            self._batch_ready.set()
+
+    async def _cancel_linger_task(self) -> None:
+        linger_task = self._linger_task
+        if linger_task is None:
             return
-
-        if self._linger_task is not None:
-            self._linger_task.cancel()
-            self._linger_task = None
-
-        records = self._accumulator.take()
-        indexed_ack_futs = tuple(self._indexed_ack_futs)
-        self._indexed_ack_futs.clear()
-
-        batch = AppendInput(
-            records=records,
-            fencing_token=self._fencing_token,
-            match_seq_num=self._match_seq_num,
-        )
-        if self._match_seq_num is not None:
-            self._match_seq_num += len(records)
-
-        try:
-            ticket = await self._session.submit(batch)
-        except BaseException as e:
-            e = normalize_exception(e)
-            self._error = e
-            for ack_fut in indexed_ack_futs:
-                if not ack_fut.done():
-                    ack_fut.set_exception(e)
-                    # Suppress "Future exception was never retrieved" for
-                    # futures the caller never got back (submit raised).
-                    ack_fut.exception()
-            raise e
-
-        self._unacked.append(
-            _UnackedBatch(ticket=ticket, indexed_ack_futs=indexed_ack_futs)
-        )
-        self._batch_ready.set()
+        self._linger_task = None
+        if linger_task is asyncio.current_task():
+            return
+        linger_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await linger_task
 
     async def _drain_acks(self) -> None:
         """Single background task that resolves batches in FIFO order."""
         while True:
             while not self._unacked:
-                if self._closed:
+                if self._closed and self._final_flush_done:
                     return
                 self._batch_ready.clear()
                 if self._unacked:
@@ -206,12 +221,11 @@ class Producer:
                 self._unacked.clear()
                 return
 
-    async def _linger_flush(self) -> None:
+    async def _flush_after_linger(self) -> None:
         assert self._accumulator.linger is not None
         await asyncio.sleep(self._accumulator.linger)
-        # Clear before calling _flush() so it doesn't cancel this task.
         self._linger_task = None
-        await self._flush()
+        await self._submit_accumulated_records()
 
 
 class RecordSubmitTicket:
