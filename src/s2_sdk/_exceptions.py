@@ -157,18 +157,14 @@ class ProtocolError(TransportError):
         super().__init__(message)
 
 
-def maybe_unwrap_exception_group(e: BaseException) -> BaseException:
-    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:
-        e = e.exceptions[0]
-    return e
+def normalize_exception(e: BaseException) -> BaseException:
+    e = _maybe_unwrap_exception_group(e)
 
-
-def normalize_exception(exc: Exception) -> S2Error:
-    e = maybe_unwrap_exception_group(exc)
-
+    if not isinstance(e, Exception):
+        return e
     if isinstance(e, S2Error):
         return e
-    assert isinstance(e, Exception)
+
     client_error = S2ClientError(e)
     client_error.__cause__ = e
     return client_error
@@ -212,3 +208,9 @@ def fallible(f):
         return async_gen_wrapper
     else:
         return sync_wrapper
+
+
+def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
+    while isinstance(e, BaseExceptionGroup) and len(e.exceptions) == 1:
+        e = e.exceptions[0]
+    return e

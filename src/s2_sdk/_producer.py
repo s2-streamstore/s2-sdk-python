@@ -8,12 +8,7 @@ from typing import Self
 from s2_sdk._append_session import AppendSession, BatchSubmitTicket
 from s2_sdk._batching import BatchAccumulator
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import (
-    S2ClientError,
-    fallible,
-    maybe_unwrap_exception_group,
-    normalize_exception,
-)
+from s2_sdk._exceptions import S2ClientError, fallible, normalize_exception
 from s2_sdk._types import (
     AppendAck,
     AppendInput,
@@ -160,9 +155,7 @@ class Producer:
         try:
             ticket = await self._session.submit(batch)
         except BaseException as e:
-            e = maybe_unwrap_exception_group(e)
-            if isinstance(e, Exception):
-                e = normalize_exception(e)
+            e = normalize_exception(e)
             self._error = e
             for ack_fut in indexed_ack_futs:
                 if not ack_fut.done():
@@ -200,9 +193,7 @@ class Producer:
                             )
                         )
             except BaseException as e:
-                e = maybe_unwrap_exception_group(e)
-                if isinstance(e, Exception):
-                    e = normalize_exception(e)
+                e = normalize_exception(e)
                 self._error = e
                 for ack_fut in unacked.indexed_ack_futs:
                     if not ack_fut.done():

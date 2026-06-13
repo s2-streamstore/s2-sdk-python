@@ -5,12 +5,7 @@ from collections import deque
 from typing import AsyncIterable, NamedTuple, Self
 
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import (
-    S2ClientError,
-    fallible,
-    maybe_unwrap_exception_group,
-    normalize_exception,
-)
+from s2_sdk._exceptions import S2ClientError, fallible, normalize_exception
 from s2_sdk._s2s._append_session import run_append_session
 from s2_sdk._types import (
     AppendAck,
@@ -148,9 +143,7 @@ class AppendSession:
             yield item
 
     def _fail_all(self, e: BaseException) -> None:
-        e = maybe_unwrap_exception_group(e)
-        if isinstance(e, Exception):
-            e = normalize_exception(e)
+        e = normalize_exception(e)
         self._error = e
         for unacked in self._unacked:
             self._permits.release(unacked.metered_bytes)
