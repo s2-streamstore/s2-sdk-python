@@ -5,7 +5,7 @@ from collections import deque
 from typing import AsyncIterable, NamedTuple, Self
 
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import S2ClientError
+from s2_sdk._exceptions import S2ClientError, fallible, normalize_exception
 from s2_sdk._s2s._append_session import run_append_session
 from s2_sdk._types import (
     AppendAck,
@@ -39,7 +39,7 @@ class AppendSession:
         "_error",
         "_encryption_key",
         "_permits",
-        "_queue",
+        "_input_queue",
         "_retry",
         "_stream_name",
         "_task",
@@ -63,13 +63,14 @@ class AppendSession:
         self._encryption_key = encryption_key
         self._permits = _AppendPermits(max_unacked_bytes, max_unacked_batches)
 
-        self._queue: asyncio.Queue[AppendInput | None] = asyncio.Queue()
+        self._input_queue: asyncio.Queue[AppendInput | None] = asyncio.Queue()
         self._unacked: deque[_UnackedBatch] = deque()
         self._closed = False
         self._error: BaseException | None = None
 
         self._task = asyncio.get_running_loop().create_task(self._run())
 
+    @fallible
     async def submit(self, inp: AppendInput) -> BatchSubmitTicket:
         """Submit a batch of records for appending.
 
@@ -89,7 +90,7 @@ class AppendSession:
 
         ack_fut: asyncio.Future[AppendAck] = asyncio.get_running_loop().create_future()
         self._unacked.append(_UnackedBatch(ack_fut, batch_bytes))
-        await self._queue.put(inp)
+        await self._input_queue.put(inp)
         return BatchSubmitTicket(ack_fut)
 
     def _check_ready(self) -> None:
@@ -98,12 +99,13 @@ class AppendSession:
         if self._error is not None:
             raise self._error
 
+    @fallible
     async def close(self) -> None:
         """Close the session and wait for all submitted batches to be appended."""
         if self._closed:
             return
         self._closed = True
-        await self._queue.put(None)
+        await self._input_queue.put(None)
         await self._task
         if self._error is not None:
             raise self._error
@@ -120,45 +122,38 @@ class AppendSession:
             async for ack in run_append_session(
                 self._client,
                 self._stream_name,
-                self._input_iter(),
+                self._inputs(),
                 retry=self._retry,
                 compression=self._compression,
                 ack_timeout=self._client._request_timeout,
                 encryption_key=self._encryption_key,
             ):
-                self._resolve_next(ack)
+                unacked = self._unacked.popleft()
+                self._permits.release(unacked.metered_bytes)
+                if not unacked.ack_fut.done():
+                    unacked.ack_fut.set_result(ack)
         except BaseException as e:
-            # Unwrap single-exception ExceptionGroups so callers see
-            # the original exception type (e.g. S2ServerError, SeqNumMismatchError).
-            exc = e
-            while isinstance(exc, BaseExceptionGroup) and len(exc.exceptions) == 1:
-                exc = exc.exceptions[0]
-            self._fail_all(exc)
+            self._fail_all(e)
 
-    async def _input_iter(self) -> AsyncIterable[AppendInput]:
+    async def _inputs(self) -> AsyncIterable[AppendInput]:
         while True:
-            item = await self._queue.get()
+            item = await self._input_queue.get()
             if item is None:
                 return
             yield item
 
-    def _resolve_next(self, ack: AppendAck) -> None:
-        unacked = self._unacked.popleft()
-        self._permits.release(unacked.metered_bytes)
-        if not unacked.ack_fut.done():
-            unacked.ack_fut.set_result(ack)
-
-    def _fail_all(self, error: BaseException) -> None:
-        self._error = error
+    def _fail_all(self, e: BaseException) -> None:
+        e = normalize_exception(e)
+        self._error = e
         for unacked in self._unacked:
             self._permits.release(unacked.metered_bytes)
             if not unacked.ack_fut.done():
-                unacked.ack_fut.set_exception(error)
+                unacked.ack_fut.set_exception(e)
         self._unacked.clear()
         # Drain queue
-        while not self._queue.empty():
+        while not self._input_queue.empty():
             try:
-                self._queue.get_nowait()
+                self._input_queue.get_nowait()
             except asyncio.QueueEmpty:
                 break
 

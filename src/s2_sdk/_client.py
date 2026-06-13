@@ -222,9 +222,9 @@ class HttpClient:
                 ) -> None:
                     if task.cancelled():
                         return
-                    exc = task.exception()
-                    if exc is not None:
-                        conn._fail_stream(_state, exc)
+                    e = task.exception()
+                    if e is not None:
+                        conn._fail_stream(_state, e)
 
                 assert send_task is not None
                 send_task.add_done_callback(_on_send_done)
@@ -934,15 +934,15 @@ class Connection:
         elif isinstance(event, h2.events.StreamReset):
             state = self._streams.get(event.stream_id)
             if state:
-                err = ProtocolError(
+                e = ProtocolError(
                     f"Stream reset with error code {event.error_code}",
                     error_code=event.error_code,
                 )
-                self._fail_stream(state, err)
+                self._fail_stream(state, e)
 
         elif isinstance(event, h2.events.ConnectionTerminated):
             self._goaway_received = True
-            err = ProtocolError(
+            e = ProtocolError(
                 f"GOAWAY received: error_code={event.error_code}, "
                 f"last_stream_id={event.last_stream_id}",
                 error_code=event.error_code,
@@ -951,20 +951,20 @@ class Connection:
             if event.last_stream_id is not None:
                 for stream_id, state in self._streams.items():
                     if stream_id > event.last_stream_id:
-                        self._fail_stream(state, err)
+                        self._fail_stream(state, e)
                 for state in self._pending_streams.values():
-                    self._fail_stream(state, err)
+                    self._fail_stream(state, e)
             else:
-                self._fail_all_streams(err)
+                self._fail_all_streams(e)
 
         elif isinstance(event, h2.events.RemoteSettingsChanged):
             self._settings_received.set()
             for state in self._streams.values():
                 state.window_updated.set()
 
-    def _fail_stream(self, state: _StreamState, error: BaseException) -> None:
+    def _fail_stream(self, state: _StreamState, e: BaseException) -> None:
         if state.error is None:
-            state.error = error
+            state.error = e
         if not state.response_headers.done():
             state.response_headers.set_exception(state.error)
         if not state.ended.is_set():
@@ -972,11 +972,11 @@ class Connection:
             state.ended.set()
         state.window_updated.set()
 
-    def _fail_all_streams(self, error: BaseException) -> None:
+    def _fail_all_streams(self, e: BaseException) -> None:
         for state in self._streams.values():
-            self._fail_stream(state, error)
+            self._fail_stream(state, e)
         for state in self._pending_streams.values():
-            self._fail_stream(state, error)
+            self._fail_stream(state, e)
 
 
 async def _drain_body(
@@ -1037,9 +1037,9 @@ def _raise_for_status(response: Response, *, retry_after_ms: str | None = None) 
         message = response.text
         code = UNKNOWN_CODE
 
-    err = S2ServerError(code, message, status)
-    err._retry_after = retry_after
-    raise err
+    e = S2ServerError(code, message, status)
+    e._retry_after = retry_after
+    raise e
 
 
 class _Checkout(NamedTuple):
