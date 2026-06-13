@@ -44,6 +44,7 @@ class Producer:
         "_closed",
         "_drain_task",
         "_error",
+        "_final_flush_done",
         "_fencing_token",
         "_flush_lock",
         "_linger_task",
@@ -84,6 +85,7 @@ class Producer:
         self._batch_ready = asyncio.Event()
         self._drain_task = asyncio.get_running_loop().create_task(self._drain_acks())
         self._closed = False
+        self._final_flush_done = False
         self._error: BaseException | None = None
 
     @fallible
@@ -115,12 +117,12 @@ class Producer:
         """Close the producer and wait for all submitted records to be appended."""
         if self._closed:
             return
+        self._closed = True
         try:
             await self._flush()
-            self._closed = True
             await self._session.close()
         finally:
-            self._closed = True
+            self._final_flush_done = True
             self._batch_ready.set()
             await self._drain_task
         if self._error is not None:
@@ -187,7 +189,7 @@ class Producer:
         """Single background task that resolves batches in FIFO order."""
         while True:
             while not self._unacked:
-                if self._closed:
+                if self._closed and self._final_flush_done:
                     return
                 self._batch_ready.clear()
                 if self._unacked:
