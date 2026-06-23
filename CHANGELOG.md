@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.2...v0.4.3) (2026-06-23)
+
+
+### Documentation
+
+* update encryption examples for central docs site  ([#79](https://github.com/s2-streamstore/s2-sdk-python/issues/79)) ([973f6b7](https://github.com/s2-streamstore/s2-sdk-python/commit/973f6b7a242475fa4300b7b01cd03c8b4384cdab))
+
 ## [0.4.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.1...v0.4.2) (2026-06-13)
 
 
