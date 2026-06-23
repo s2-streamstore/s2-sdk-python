@@ -29,17 +29,11 @@ async def main():
         raise RuntimeError("S2_ENCRYPTION_KEY is required")
 
     async with S2(access_token) as client:
-        basin = client.basin(basin_name)
-        stream_name = f"docs-encryption-{int(time.time())}"
-
         # ANCHOR: basin-cipher
-        try:
-            await client.create_basin(
-                basin_name,
-                config=BasinConfig(stream_cipher=Encryption.AEGIS_256),
-            )
-        except Exception:
-            pass
+        await client.create_basin(
+            basin_name,
+            config=BasinConfig(stream_cipher=Encryption.AEGIS_256),
+        )
 
         await client.reconfigure_basin(
             basin_name,
@@ -47,11 +41,10 @@ async def main():
         )
         # ANCHOR_END: basin-cipher
 
-        # Ensure stream exists
-        try:
-            await basin.create_stream(stream_name)
-        except Exception:
-            pass
+        basin = client.basin(basin_name)
+        stream_name = f"docs-encryption-{int(time.time())}"
+
+        await basin.ensure_stream(stream_name)
 
         # ANCHOR: append-read
         stream = basin.stream(
