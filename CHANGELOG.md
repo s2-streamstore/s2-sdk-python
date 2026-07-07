@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.3...v0.5.0) (2026-07-07)
+
+
+### Features
+
+* use `a.s2.dev` as the default account endpoint ([#83](https://github.com/s2-streamstore/s2-sdk-python/issues/83)) ([4e060c7](https://github.com/s2-streamstore/s2-sdk-python/commit/4e060c7b8899742967d512bf19e10e5fec6a4b6c))
+
 ## [0.4.3](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.2...v0.4.3) (2026-06-23)
 
 
