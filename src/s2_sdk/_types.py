@@ -76,7 +76,7 @@ class Endpoints:
     def default(cls) -> Endpoints:
         """Construct default S2 cloud endpoints."""
         return cls(
-            account="https://aws.s2.dev",
+            account="https://a.s2.dev",
             basin="https://{basin}.b.s2.dev",
         )
 
