@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.5.0...v0.6.0) (2026-07-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* incorrect and inconsistent yield semantics in `append_record_batches` ([#85](https://github.com/s2-streamstore/s2-sdk-python/issues/85))
+
+### Bug Fixes
+
+* incorrect and inconsistent yield semantics in `append_record_batches` ([#85](https://github.com/s2-streamstore/s2-sdk-python/issues/85)) ([65c5590](https://github.com/s2-streamstore/s2-sdk-python/commit/65c559042332a1c06eaa320be0b03ac03dd7a355))
+* uncaught `asyncio.CancelledError` in `Connection.send_headers` ([#87](https://github.com/s2-streamstore/s2-sdk-python/issues/87)) ([c050a9d](https://github.com/s2-streamstore/s2-sdk-python/commit/c050a9d02326293bbf1099c71a12efca956b6f36))
+
 ## [0.5.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.4.3...v0.5.0) (2026-07-07)
 
 
