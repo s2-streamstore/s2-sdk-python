@@ -47,9 +47,10 @@ async def append_record_batches(
 ) -> AsyncIterable[list[Record]]:
     """Group records into batches based on count, bytes, and linger time.
 
-    If iteration over ``records`` raises, or batching is cancelled or stopped before
-    completion, records already consumed but not yet yielded as a batch may be
-    discarded.
+    Note:
+        If iteration over ``records`` raises, or batching is cancelled or stopped
+        before completion, records already consumed but not yet yielded as a batch
+        may be discarded.
     """
     if batching is None:
         batching = Batching()
