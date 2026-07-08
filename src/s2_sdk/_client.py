@@ -686,7 +686,7 @@ class Connection:
             try:
                 self._h2.send_headers(stream_id, headers, end_stream=end_stream)
                 await self._flush_h2_data_and_drain()
-            except Exception:
+            except (asyncio.CancelledError, Exception):
                 self._streams.pop(stream_id, None)
                 raise
             return stream_id
