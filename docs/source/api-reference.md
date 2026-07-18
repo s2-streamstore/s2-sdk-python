@@ -22,6 +22,9 @@
 .. autoclass:: BatchSubmitTicket()
     :members:
 
+.. autoclass:: ReadSession()
+    :members:
+
 .. autoclass:: Producer()
     :members:
 
@@ -189,6 +192,10 @@
     :show-inheritance:
 
 .. autoclass:: ReadUnwrittenError()
+    :members:
+    :show-inheritance:
+
+.. autoclass:: ReadSessionClosedError()
     :members:
     :show-inheritance:
 ```

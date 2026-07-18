@@ -2,12 +2,14 @@ import asyncio
 import logging
 import math
 import time
-from typing import Any, AsyncIterable
+from collections.abc import AsyncIterator
+from typing import Any
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError
 from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
+from s2_sdk._read_session import _ReadSessionUpdate
 from s2_sdk._retrier import Attempt, compute_backoff, http_retry_on
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
@@ -17,6 +19,7 @@ from s2_sdk._types import (
     ReadLimit,
     Retry,
     SeqNum,
+    StreamPosition,
     TailOffset,
     Timestamp,
     metered_bytes,
@@ -38,7 +41,7 @@ async def run_read_session(
     ignore_command_records: bool,
     retry: Retry,
     encryption_key: str | None = None,
-) -> AsyncIterable[ReadBatch]:
+) -> AsyncIterator[_ReadSessionUpdate]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     max_retries = retry._max_retries()
     min_base_delay = retry.min_base_delay.total_seconds()
@@ -90,37 +93,29 @@ async def run_read_session(
                     if batch.tail is not None:
                         last_tail_at = time.monotonic()
 
-                    if not batch.records:
-                        continue
-
-                    last_record = batch.records[-1]
-                    params["seq_num"] = last_record.seq_num + 1
-                    params.pop("timestamp", None)
-                    params.pop("tail_offset", None)
-
-                    if remaining_count is not None:
-                        remaining_count = max(remaining_count - len(batch.records), 0)
-                        params["count"] = remaining_count
-                    if remaining_bytes is not None:
-                        remaining_bytes = max(
-                            remaining_bytes - metered_bytes(batch.records), 0
-                        )
-                        params["bytes"] = remaining_bytes
-
-                    if ignore_command_records:
-                        batch = ReadBatch(
-                            records=[
-                                r for r in batch.records if not r.is_command_record()
-                            ],
-                            tail=batch.tail,
-                        )
-
                     if batch.records:
-                        yield batch
+                        last_record = batch.records[-1]
+                        params["seq_num"] = last_record.seq_num + 1
+                        params.pop("timestamp", None)
+                        params.pop("tail_offset", None)
+
+                        if remaining_count is not None:
+                            remaining_count = max(
+                                remaining_count - len(batch.records), 0
+                            )
+                            params["count"] = remaining_count
+                        if remaining_bytes is not None:
+                            remaining_bytes = max(
+                                remaining_bytes - metered_bytes(batch.records), 0
+                            )
+                            params["bytes"] = remaining_bytes
+
+                    yield _read_session_update(batch, ignore_command_records)
 
             return
         except Exception as e:
             if attempt.value < max_retries and http_retry_on(e):
+                yield _ReadSessionUpdate()
                 backoff = compute_backoff(
                     attempt.value,
                     min_base_delay=min_base_delay,
@@ -142,6 +137,26 @@ async def run_read_session(
                     attempt.value >= max_retries,
                 )
                 raise e
+
+
+def _caught_up_tail(batch: ReadBatch) -> StreamPosition | None:
+    if batch.tail is None:
+        return None
+    if not batch.records or batch.records[-1].seq_num + 1 == batch.tail.seq_num:
+        return batch.tail
+    return None
+
+
+def _read_session_update(
+    batch: ReadBatch, ignore_command_records: bool
+) -> _ReadSessionUpdate:
+    caught_up_tail = _caught_up_tail(batch)
+    if ignore_command_records:
+        batch = ReadBatch(
+            records=[r for r in batch.records if not r.is_command_record()],
+            tail=batch.tail,
+        )
+    return _ReadSessionUpdate(batch, caught_up_tail)
 
 
 def _build_read_params(

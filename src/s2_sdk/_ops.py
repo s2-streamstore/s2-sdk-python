@@ -2,7 +2,7 @@ import base64
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Any, AsyncIterable, Self
+from typing import Any, Self
 from urllib.parse import quote
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
@@ -33,6 +33,7 @@ from s2_sdk._mappers import (
     tail_from_json,
 )
 from s2_sdk._producer import Producer
+from s2_sdk._read_session import ReadSession
 from s2_sdk._retrier import Retrier, http_retry_on, is_safe_to_retry_unary
 from s2_sdk._s2s._read_session import run_read_session
 from s2_sdk._types import (
@@ -1172,7 +1173,7 @@ class S2Stream:
         return batch
 
     @fallible
-    async def read_session(
+    def read_session(
         self,
         *,
         start: types.SeqNum | types.Timestamp | types.TailOffset,
@@ -1181,7 +1182,7 @@ class S2Stream:
         clamp_to_tail: bool = False,
         wait: int | None = None,
         ignore_command_records: bool = False,
-    ) -> AsyncIterable[types.ReadBatch]:
+    ) -> ReadSession:
         """Read batches of records from a stream continuously.
 
         Args:
@@ -1196,9 +1197,8 @@ class S2Stream:
                 reached.
             ignore_command_records: Filter out command records from batches.
 
-        Yields:
-            :class:`ReadBatch` — each containing a batch of records and an
-            optional tail position.
+        Returns:
+            A :class:`ReadSession` that yields batches of records.
 
         Note:
             Sessions without bounds (no ``limit`` or ``until_timestamp``) default
@@ -1207,19 +1207,20 @@ class S2Stream:
             ``wait`` makes a bounded session wait up to that many seconds for
             new records before ending.
         """
-        async for batch in run_read_session(
-            self._client,
-            self.name,
-            start,
-            limit,
-            until_timestamp,
-            clamp_to_tail,
-            wait,
-            ignore_command_records,
-            retry=self._retry,
-            encryption_key=self._encryption_key,
-        ):
-            yield batch
+        return ReadSession(
+            run_read_session(
+                self._client,
+                self.name,
+                start,
+                limit,
+                until_timestamp,
+                clamp_to_tail,
+                wait,
+                ignore_command_records,
+                retry=self._retry,
+                encryption_key=self._encryption_key,
+            )
+        )
 
 
 def _s2_request_token() -> str:
