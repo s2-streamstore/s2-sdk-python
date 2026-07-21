@@ -35,7 +35,7 @@ class _ReadDelivery:
 
 
 class ReadSession(AsyncIterator[ReadBatch]):
-    """Async iterator that yields :class:`ReadBatch` values with caught-up tracking.
+    """Async iterator that yields :class:`ReadBatch` values and tracks caught-up state.
 
     Use it as an async context manager, or call :meth:`close` explicitly to close the session.
 
