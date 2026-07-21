@@ -117,7 +117,9 @@ async def run_read_session(
                     elif batch.tail is not None:
                         yield _ReadSessionHeartbeat(batch.tail)
                     else:
-                        raise S2ClientError("Read session received an empty batch without a tail")
+                        raise S2ClientError(
+                            "Read session received an empty batch without a tail"
+                        )
 
             return
         except Exception as e:
