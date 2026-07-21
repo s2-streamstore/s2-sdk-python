@@ -28,6 +28,8 @@ class AppendSession:
     Supports pipelining multiple :class:`AppendInput`\\ s while preserving
     submission order.
 
+    Use it as an async context manager, or call :meth:`close` explicitly to close the session.
+
     Caution:
         Returned by :meth:`S2Stream.append_session`. Do not instantiate directly.
     """

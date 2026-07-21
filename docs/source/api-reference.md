@@ -194,8 +194,4 @@
 .. autoclass:: ReadUnwrittenError()
     :members:
     :show-inheritance:
-
-.. autoclass:: ReadSessionClosedError()
-    :members:
-    :show-inheritance:
 ```

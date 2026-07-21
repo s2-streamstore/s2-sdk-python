@@ -2,24 +2,27 @@ import asyncio
 import logging
 import math
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import ReadTimeoutError
+from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
-from s2_sdk._read_session import _ReadSessionUpdate
+from s2_sdk._read_session import (
+    _ReadSessionBatch,
+    _ReadSessionEvent,
+    _ReadSessionHeartbeat,
+    _ReadSessionRetrying,
+)
 from s2_sdk._retrier import Attempt, compute_backoff, http_retry_on
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
-    ReadBatch,
     ReadLimit,
     Retry,
     SeqNum,
-    StreamPosition,
     TailOffset,
     Timestamp,
     metered_bytes,
@@ -38,10 +41,9 @@ async def run_read_session(
     until_timestamp: int | None,
     clamp_to_tail: bool,
     wait: int | None,
-    ignore_command_records: bool,
     retry: Retry,
     encryption_key: str | None = None,
-) -> AsyncIterator[_ReadSessionUpdate]:
+) -> AsyncGenerator[_ReadSessionEvent, None]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     max_retries = retry._max_retries()
     min_base_delay = retry.min_base_delay.total_seconds()
@@ -110,12 +112,17 @@ async def run_read_session(
                             )
                             params["bytes"] = remaining_bytes
 
-                    yield _read_session_update(batch, ignore_command_records)
+                    if batch.records:
+                        yield _ReadSessionBatch(batch)
+                    elif batch.tail is not None:
+                        yield _ReadSessionHeartbeat(batch.tail)
+                    else:
+                        raise S2ClientError("Read session received an empty batch without a tail")
 
             return
         except Exception as e:
             if attempt.value < max_retries and http_retry_on(e):
-                yield _ReadSessionUpdate()
+                yield _ReadSessionRetrying()
                 backoff = compute_backoff(
                     attempt.value,
                     min_base_delay=min_base_delay,
@@ -137,26 +144,6 @@ async def run_read_session(
                     attempt.value >= max_retries,
                 )
                 raise e
-
-
-def _caught_up_tail(batch: ReadBatch) -> StreamPosition | None:
-    if batch.tail is None:
-        return None
-    if not batch.records or batch.records[-1].seq_num + 1 == batch.tail.seq_num:
-        return batch.tail
-    return None
-
-
-def _read_session_update(
-    batch: ReadBatch, ignore_command_records: bool
-) -> _ReadSessionUpdate:
-    caught_up_tail = _caught_up_tail(batch)
-    if ignore_command_records:
-        batch = ReadBatch(
-            records=[r for r in batch.records if not r.is_command_record()],
-            tail=batch.tail,
-        )
-    return _ReadSessionUpdate(batch, caught_up_tail)
 
 
 def _build_read_params(

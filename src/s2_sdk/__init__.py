@@ -6,7 +6,6 @@ from s2_sdk._batching import append_inputs, append_record_batches
 from s2_sdk._exceptions import (
     AppendConditionError,
     FencingTokenMismatchError,
-    ReadSessionClosedError,
     ReadUnwrittenError,
     S2ClientError,
     S2Error,
@@ -137,5 +136,4 @@ __all__ = [
     "FencingTokenMismatchError",
     "SeqNumMismatchError",
     "ReadUnwrittenError",
-    "ReadSessionClosedError",
 ]

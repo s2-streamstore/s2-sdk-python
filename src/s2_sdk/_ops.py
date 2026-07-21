@@ -1216,10 +1216,10 @@ class S2Stream:
                 until_timestamp,
                 clamp_to_tail,
                 wait,
-                ignore_command_records,
                 retry=self._retry,
                 encryption_key=self._encryption_key,
-            )
+            ),
+            ignore_command_records=ignore_command_records,
         )
 
 

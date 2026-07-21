@@ -16,10 +16,6 @@ class S2ClientError(S2Error):
     """Error originating from the client."""
 
 
-class ReadSessionClosedError(S2ClientError):
-    """Read session ended before becoming caught up."""
-
-
 UNKNOWN_CODE = "unknown"
 
 
@@ -130,7 +126,6 @@ def raise_for_416(body: dict, code: str) -> None:
 
 S2Error.__module__ = "s2_sdk"
 S2ClientError.__module__ = "s2_sdk"
-ReadSessionClosedError.__module__ = "s2_sdk"
 S2ServerError.__module__ = "s2_sdk"
 AppendConditionError.__module__ = "s2_sdk"
 FencingTokenMismatchError.__module__ = "s2_sdk"
