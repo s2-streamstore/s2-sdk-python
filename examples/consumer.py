@@ -28,9 +28,12 @@ async def consumer():
         tail = await stream.check_tail()
         logger.info("reading from tail: %s", tail)
         total_num_records = 0
-        async for batch in stream.read_session(start=SeqNum(tail.seq_num)):
-            total_num_records += len(batch.records)
-            logger.info("read %d now, %d so far", len(batch.records), total_num_records)
+        async with stream.read_session(start=SeqNum(tail.seq_num)) as session:
+            async for batch in session:
+                total_num_records += len(batch.records)
+                logger.info(
+                    "read %d now, %d so far", len(batch.records), total_num_records
+                )
 
 
 if __name__ == "__main__":
