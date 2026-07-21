@@ -114,18 +114,20 @@ async def check_tail_example(stream):
 
 async def read_session_example(stream):
     # ANCHOR: read-session
-    async for batch in stream.read_session(start=SeqNum(0)):
-        for record in batch.records:
-            print(f"[{record.seq_num}] {record.body}")
+    async with stream.read_session(start=SeqNum(0)) as session:
+        async for batch in session:
+            for record in batch.records:
+                print(f"[{record.seq_num}] {record.body}")
     # ANCHOR_END: read-session
 
 
 async def read_session_tail_offset(stream):
     # ANCHOR: read-session-tail-offset
     # Start reading from 10 records before the current tail
-    async for batch in stream.read_session(start=TailOffset(10)):
-        for record in batch.records:
-            print(f"[{record.seq_num}] {record.body}")
+    async with stream.read_session(start=TailOffset(10)) as session:
+        async for batch in session:
+            for record in batch.records:
+                print(f"[{record.seq_num}] {record.body}")
     # ANCHOR_END: read-session-tail-offset
 
 
@@ -133,9 +135,10 @@ async def read_session_timestamp(stream):
     # ANCHOR: read-session-timestamp
     # Start reading from a specific timestamp
     one_hour_ago_ms = int((time.time() - 3600) * 1000)
-    async for batch in stream.read_session(start=Timestamp(one_hour_ago_ms)):
-        for record in batch.records:
-            print(f"[{record.seq_num}] {record.body}")
+    async with stream.read_session(start=Timestamp(one_hour_ago_ms)) as session:
+        async for batch in session:
+            for record in batch.records:
+                print(f"[{record.seq_num}] {record.body}")
     # ANCHOR_END: read-session-timestamp
 
 
@@ -143,24 +146,26 @@ async def read_session_until(stream):
     # ANCHOR: read-session-until
     # Read records until a specific timestamp
     one_hour_ago_ms = int((time.time() - 3600) * 1000)
-    async for batch in stream.read_session(
+    async with stream.read_session(
         start=SeqNum(0),
         until_timestamp=one_hour_ago_ms,
-    ):
-        for record in batch.records:
-            print(f"[{record.seq_num}] {record.body}")
+    ) as session:
+        async for batch in session:
+            for record in batch.records:
+                print(f"[{record.seq_num}] {record.body}")
     # ANCHOR_END: read-session-until
 
 
 async def read_session_wait(stream):
     # ANCHOR: read-session-wait
     # Read all available records, then wait up to 30 seconds for new ones
-    async for batch in stream.read_session(
+    async with stream.read_session(
         start=SeqNum(0),
         wait=30,
-    ):
-        for record in batch.records:
-            print(f"[{record.seq_num}] {record.body}")
+    ) as session:
+        async for batch in session:
+            for record in batch.records:
+                print(f"[{record.seq_num}] {record.body}")
     # ANCHOR_END: read-session-wait
 
 
