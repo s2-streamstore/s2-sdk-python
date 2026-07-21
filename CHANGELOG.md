@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.7.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.6.0...v0.7.0) (2026-07-21)
+
+
+### ⚠ BREAKING CHANGES
+
+* introduce `ReadSession` with caught-up state tracking  ([#88](https://github.com/s2-streamstore/s2-sdk-python/issues/88))
+
+### Features
+
+* introduce `ReadSession` with caught-up state tracking  ([#88](https://github.com/s2-streamstore/s2-sdk-python/issues/88)) ([55da950](https://github.com/s2-streamstore/s2-sdk-python/commit/55da9502bac470b0baf8cbd6780c9e89474ce866))
+
+
+### Documentation
+
+* use context manager in read session examples ([#90](https://github.com/s2-streamstore/s2-sdk-python/issues/90)) ([6cfbd98](https://github.com/s2-streamstore/s2-sdk-python/commit/6cfbd98558fcba56c5c14cf426eee327004c6f46))
+
 ## [0.6.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.5.0...v0.6.0) (2026-07-08)
 
 
