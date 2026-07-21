@@ -81,7 +81,7 @@ class ReadSession(AsyncIterator[ReadBatch]):
         return self._caught_up_tail is not None
 
     def caught_up(self) -> Awaitable[StreamPosition]:
-        """Return an awaitable that resolves to a tail position once this session is caught up to it.
+        """Get an awaitable that resolves to a tail position once this session is caught up to it.
 
         See :meth:`is_caught_up` for the semantics of caught up.
 
