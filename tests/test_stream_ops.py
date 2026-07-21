@@ -702,10 +702,11 @@ class TestStreamOperations:
         )
 
         batches = []
-        async for batch in stream.read_session(
+        async with stream.read_session(
             start=SeqNum(0), limit=ReadLimit(count=2)
-        ):
-            batches.append(batch)
+        ) as session:
+            async for batch in session:
+                batches.append(batch)
 
         assert len(batches) >= 1
         assert len(batches[0].records) == 2
@@ -717,8 +718,9 @@ class TestStreamOperations:
 
         with pytest.raises(asyncio.TimeoutError):
             async with asyncio.timeout(2):
-                async for batch in stream.read_session(start=SeqNum(0)):
-                    received.extend(batch.records)
+                async with stream.read_session(start=SeqNum(0)) as session:
+                    async for batch in session:
+                        received.extend(batch.records)
 
         assert len(received) == 2
         assert received[0].body == b"a"
@@ -734,8 +736,9 @@ class TestStreamOperations:
         try:
             with pytest.raises(asyncio.TimeoutError):
                 async with asyncio.timeout(5):
-                    async for batch in stream.read_session(start=SeqNum(0)):
-                        received.extend(batch.records)
+                    async with stream.read_session(start=SeqNum(0)) as session:
+                        async for batch in session:
+                            received.extend(batch.records)
         finally:
             append_later_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -746,24 +749,27 @@ class TestStreamOperations:
     async def test_read_session_tails(self, stream: S2Stream):
         with pytest.raises(asyncio.TimeoutError):
             async with asyncio.timeout(1):
-                async for _ in stream.read_session(start=SeqNum(0)):
-                    pass
+                async with stream.read_session(start=SeqNum(0)) as session:
+                    async for _ in session:
+                        pass
 
     async def test_read_session_clamp_to_tail_tails(self, stream: S2Stream):
         await stream.append(AppendInput(records=[Record(body=b"data")]))
         received = []
         with pytest.raises(asyncio.TimeoutError):
             async with asyncio.timeout(1):
-                async for batch in stream.read_session(
+                async with stream.read_session(
                     start=SeqNum(100), clamp_to_tail=True
-                ):
-                    received.extend(batch.records)
+                ) as session:
+                    async for batch in session:
+                        received.extend(batch.records)
         assert received == []
 
     async def test_read_session_beyond_tail_errors(self, stream: S2Stream):
         with pytest.raises(ReadUnwrittenError) as exc_info:
-            async for _ in stream.read_session(start=SeqNum(100)):
-                pass
+            async with stream.read_session(start=SeqNum(100)) as session:
+                async for _ in session:
+                    pass
         assert exc_info.value.tail.seq_num == 0
 
 
