@@ -22,6 +22,9 @@
 .. autoclass:: BatchSubmitTicket()
     :members:
 
+.. autoclass:: ReadSession()
+    :members:
+
 .. autoclass:: Producer()
     :members:
 

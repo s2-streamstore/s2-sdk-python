@@ -14,6 +14,7 @@ from s2_sdk._exceptions import (
 )
 from s2_sdk._ops import S2, S2Basin, S2Stream
 from s2_sdk._producer import Producer, RecordSubmitTicket
+from s2_sdk._read_session import ReadSession
 from s2_sdk._types import (
     AccessTokenInfo,
     AccessTokenScope,
@@ -98,6 +99,7 @@ __all__ = [
     "Timestamp",
     "TailOffset",
     "ReadBatch",
+    "ReadSession",
     "ReadLimit",
     "SequencedRecord",
     "Page",

@@ -5,7 +5,7 @@ import json as json_lib
 import ssl
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from typing import Any, NamedTuple
@@ -423,10 +423,8 @@ class ConnectionPool:
         self._closed = True
         if self._reaper_task is not None:
             self._reaper_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._reaper_task
-            except asyncio.CancelledError:
-                pass
         for conns in self._hosts.values():
             for pc in conns:
                 await pc.close()

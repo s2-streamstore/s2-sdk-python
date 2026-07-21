@@ -33,6 +33,8 @@ class Producer:
     Handles batching into :class:`AppendInput` automatically and uses an
     append session internally.
 
+    Use it as an async context manager, or call :meth:`close` explicitly to close the producer.
+
     Caution:
         Returned by :meth:`S2Stream.producer`. Do not instantiate directly.
     """
