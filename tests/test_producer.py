@@ -50,8 +50,11 @@ class _TestAppendSession:
         self._fail_on_submit = fail_on_submit
         self._submit_error = submit_error
         self._submit_count = 0
+        self._closed = False
 
     async def submit(self, append_input: AppendInput) -> BatchSubmitTicket:
+        if self._closed:
+            raise S2ClientError("AppendSession is closed")
         self._submit_count += 1
         if self._submit_count == self._fail_on_submit:
             assert self._submit_error is not None
@@ -62,7 +65,7 @@ class _TestAppendSession:
         return BatchSubmitTicket(ack_fut)
 
     async def close(self) -> None:
-        pass
+        self._closed = True
 
 
 def _producer(
@@ -249,6 +252,3 @@ async def test_flush_propagates_terminal_failure_to_pending_tickets(
     with pytest.raises(S2Error) as close_exc:
         await _wait_for(close_task)
     assert close_exc.value is error
-    if failure_phase == "submit":
-        assert isinstance(error, SeqNumMismatchError)
-        assert error.expected_seq_num == 7

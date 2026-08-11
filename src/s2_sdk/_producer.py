@@ -24,7 +24,7 @@ from s2_sdk._types import (
 @dataclass(slots=True)
 class _UnackedBatch:
     ticket: BatchSubmitTicket
-    indexed_ack_futs: tuple[asyncio.Future[IndexedAppendAck], ...]
+    record_ack_futs: tuple[asyncio.Future[IndexedAppendAck], ...]
 
 
 def _retrieve_task_exception(task: asyncio.Task[None]) -> None:
@@ -46,7 +46,7 @@ class Producer:
 
     __slots__ = (
         "_accumulator",
-        "_indexed_ack_futs",
+        "_buffered_ack_futs",
         "_batch_ready",
         "_closed",
         "_drain_task",
@@ -56,7 +56,7 @@ class Producer:
         "_linger_task",
         "_match_seq_num",
         "_operation_lock",
-        "_pending_ack_futs",
+        "_outstanding_ack_futs",
         "_unacked",
         "_session",
     )
@@ -86,9 +86,9 @@ class Producer:
         self._match_seq_num = match_seq_num
         self._accumulator = BatchAccumulator(batching)
 
-        self._indexed_ack_futs: list[asyncio.Future[IndexedAppendAck]] = []
+        self._buffered_ack_futs: list[asyncio.Future[IndexedAppendAck]] = []
         self._operation_lock = asyncio.Lock()
-        self._pending_ack_futs: set[asyncio.Future[IndexedAppendAck]] = set()
+        self._outstanding_ack_futs: set[asyncio.Future[IndexedAppendAck]] = set()
         self._linger_task: asyncio.Task[None] | None = None
         self._unacked: deque[_UnackedBatch] = deque()
         self._batch_ready = asyncio.Event()
@@ -110,9 +110,9 @@ class Producer:
 
             loop = asyncio.get_running_loop()
             ack_fut: asyncio.Future[IndexedAppendAck] = loop.create_future()
-            self._indexed_ack_futs.append(ack_fut)
-            self._pending_ack_futs.add(ack_fut)
-            ack_fut.add_done_callback(self._pending_ack_futs.discard)
+            self._buffered_ack_futs.append(ack_fut)
+            self._outstanding_ack_futs.add(ack_fut)
+            ack_fut.add_done_callback(self._outstanding_ack_futs.discard)
 
             first_in_batch = self._accumulator.is_empty()
             self._accumulator.add(record)
@@ -146,16 +146,16 @@ class Producer:
     async def _flush_and_wait(self) -> None:
         async with self._operation_lock:
             self._check_ready()
-            ack_futs_to_wait = tuple(self._pending_ack_futs)
+            prior_ack_futs = tuple(self._outstanding_ack_futs)
             await self._flush_current_batch()
 
             if self._error is not None:
                 raise self._error
-            if not ack_futs_to_wait:
+            if not prior_ack_futs:
                 return
 
             results = await asyncio.shield(
-                asyncio.gather(*ack_futs_to_wait, return_exceptions=True)
+                asyncio.gather(*prior_ack_futs, return_exceptions=True)
             )
             for result in results:
                 if isinstance(result, BaseException):
@@ -212,8 +212,8 @@ class Producer:
             return
 
         records = self._accumulator.take()
-        indexed_ack_futs = tuple(self._indexed_ack_futs)
-        self._indexed_ack_futs.clear()
+        record_ack_futs = tuple(self._buffered_ack_futs)
+        self._buffered_ack_futs.clear()
 
         batch = AppendInput(
             records=records,
@@ -227,14 +227,14 @@ class Producer:
             ticket = await self._session.submit(batch)
         except BaseException as e:
             error = self._fail(e)
-            for ack_fut in indexed_ack_futs:
+            for ack_fut in record_ack_futs:
                 # Suppress "Future exception was never retrieved" for the
                 # record whose submit call raised before returning its ticket.
                 ack_fut.exception()
             raise error
 
         self._unacked.append(
-            _UnackedBatch(ticket=ticket, indexed_ack_futs=indexed_ack_futs)
+            _UnackedBatch(ticket=ticket, record_ack_futs=record_ack_futs)
         )
         self._batch_ready.set()
 
@@ -263,7 +263,7 @@ class Producer:
             unacked = self._unacked.popleft()
             try:
                 ack: AppendAck = await unacked.ticket  # type: ignore[assignment]
-                for i, ack_fut in enumerate(unacked.indexed_ack_futs):
+                for i, ack_fut in enumerate(unacked.record_ack_futs):
                     if not ack_fut.done():
                         ack_fut.set_result(
                             IndexedAppendAck(
@@ -303,8 +303,8 @@ class Producer:
             linger_task.cancel()
 
         self._accumulator.take()
-        self._indexed_ack_futs.clear()
-        for ack_fut in tuple(self._pending_ack_futs):
+        self._buffered_ack_futs.clear()
+        for ack_fut in tuple(self._outstanding_ack_futs):
             if not ack_fut.done():
                 ack_fut.set_exception(error)
 
