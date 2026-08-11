@@ -20,7 +20,7 @@ jobs:
           version: ${{ env.UV_VERSION }}
       - name: Sync dependencies
         run: |
-          uv sync --all-groups
+          uv sync --all-groups --locked
       - name: Code quality check
         run: uv run poe cq-check
       - name: Unit tests
@@ -40,7 +40,7 @@ jobs:
         with:
           version: ${{ env.UV_VERSION }}
       - name: Sync dependencies
-        run: uv sync --group test
+        run: uv sync --group test --locked
       - name: Run integration tests
         env:
           S2_ACCESS_TOKEN: ${{ secrets.S2_ACCESS_TOKEN }}
