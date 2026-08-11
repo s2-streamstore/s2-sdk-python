@@ -248,7 +248,7 @@ async def test_send_headers_allocates_ids_from_h2_under_lock():
     state1 = conn.reserve_stream()
     state2 = conn.reserve_stream()
 
-    with patch.object(Connection, "_flush_h2_data_and_drain", new=AsyncMock()):
+    with patch.object(Connection, "_flush", new=AsyncMock()):
         stream1 = await conn.send_headers(state1, [(":method", "GET")], end_stream=True)
         stream2 = await conn.send_headers(state2, [(":method", "GET")], end_stream=True)
 
