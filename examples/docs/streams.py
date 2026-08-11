@@ -99,6 +99,9 @@ async def producer_example(stream):
         # Submit individual records
         ticket = await producer.submit(Record(body=b"my event"))
 
+        # Make all records submitted so far durable without closing the producer
+        await producer.flush()
+
         # Get the exact sequence number for this record
         ack = await ticket
         print(f"Record durable at seq_num {ack.seq_num}")
