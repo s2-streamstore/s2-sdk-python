@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.7.0...v0.7.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* transport use-after-close crashes append session  ([#93](https://github.com/s2-streamstore/s2-sdk-python/issues/93)) ([b075858](https://github.com/s2-streamstore/s2-sdk-python/commit/b0758585dbfe926ee48a06126f03ef207889f75a))
+
 ## [0.7.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.6.0...v0.7.0) (2026-07-21)
 
 
