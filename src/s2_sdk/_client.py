@@ -331,6 +331,8 @@ class ConnectionPool:
             self._host_locks[base_url] = lock
 
         async with lock:
+            if self._closed:
+                raise S2ClientError("Pool is closed")
             # Re-check after acquiring lock — another caller may have
             # created a connection while we waited.
             result = self._try_checkout(base_url)

@@ -126,6 +126,36 @@ async def test_closed_pool_raises(pool: ConnectionPool):
 
 
 @pytest.mark.asyncio
+async def test_checkout_racing_close_does_not_orphan_connection(pool: ConnectionPool):
+    """A checkout() blocked waiting on the per-host lock must not create or
+    register a connection if close() completes while it was waiting.
+
+    Regression test: checkout() only checked `_closed` before acquiring the
+    per-host lock, not after. A caller could pass that initial check, then
+    block on the lock while a concurrent close() ran to completion, then
+    acquire the lock and still create a connection — leaving it registered
+    in a "closed" pool with its socket and background recv task never
+    cleaned up.
+    """
+    base_url = "https://example.com"
+    lock = asyncio.Lock()
+    pool._host_locks[base_url] = lock
+    await lock.acquire()  # Simulate the lock being held by another caller.
+
+    with patch("s2_sdk._client.Connection", return_value=_mock_connection()):
+        task = asyncio.create_task(pool.checkout(base_url))
+        await asyncio.sleep(0)  # Let the task block on lock acquisition.
+
+        await pool.close()
+        lock.release()  # The blocked checkout can now proceed.
+
+        with pytest.raises(S2ClientError, match="Pool is closed"):
+            await task
+
+    assert pool._hosts == {}
+
+
+@pytest.mark.asyncio
 async def test_dead_connection_not_reused(pool: ConnectionPool):
     """A connection whose recv_loop has died should not be reused."""
     with patch("s2_sdk._client.Connection") as MockConn:
