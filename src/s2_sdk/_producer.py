@@ -13,7 +13,7 @@ from s2_sdk._exceptions import (
     S2ClientError,
     fallible,
     normalize_exception,
-    retrieve_task_exception,
+    retrieve_task_exception_if_present,
     set_and_retrieve_future_exception,
 )
 from s2_sdk._types import (
@@ -117,7 +117,7 @@ class Producer:
             await self._flush()
         elif first_in_batch and self._accumulator.linger > 0:
             linger_task = loop.create_task(self._flush_after_linger())
-            linger_task.add_done_callback(retrieve_task_exception)
+            linger_task.add_done_callback(retrieve_task_exception_if_present)
             self._linger_task = linger_task
 
         return RecordSubmitTicket(ack_fut)

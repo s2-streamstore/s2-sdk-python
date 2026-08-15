@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 def set_and_retrieve_future_exception(
     future: asyncio.Future[Any], exception: BaseException
 ) -> None:
-    """Set an exception and immediately mark it as retrieved.
+    """Set an exception and immediately retrieve it.
 
     This prevents `Future.__del__` from reporting
     "Future exception was never retrieved" when the `Future` is finalized.
@@ -22,8 +22,8 @@ def set_and_retrieve_future_exception(
         future.exception()
 
 
-def retrieve_task_exception(task: asyncio.Task[Any]) -> None:
-    """Mark the exception as retrieved.
+def retrieve_task_exception_if_present(task: asyncio.Task[Any]) -> None:
+    """Retrieve an exception, if present.
 
     This prevents `Future.__del__` from reporting
     "Task exception was never retrieved" when the `Task` is finalized.
