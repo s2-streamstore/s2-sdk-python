@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.7.1...v0.7.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* unretrieved exceptions reported during `Future`/`Task` finalization  ([#99](https://github.com/s2-streamstore/s2-sdk-python/issues/99)) ([054b13a](https://github.com/s2-streamstore/s2-sdk-python/commit/054b13ad639b846732703da55a08bdfdb09e49c5))
+
 ## [0.7.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.7.0...v0.7.1) (2026-08-12)
 
 
