@@ -9,7 +9,13 @@ from typing import Self
 from s2_sdk._append_session import AppendSession, BatchSubmitTicket
 from s2_sdk._batching import BatchAccumulator
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import S2ClientError, fallible, normalize_exception
+from s2_sdk._exceptions import (
+    S2ClientError,
+    fallible,
+    normalize_exception,
+    retrieve_task_exception,
+    set_and_retrieve_future_exception,
+)
 from s2_sdk._types import (
     AppendAck,
     AppendInput,
@@ -110,7 +116,9 @@ class Producer:
         if self._accumulator.is_full():
             await self._flush()
         elif first_in_batch and self._accumulator.linger > 0:
-            self._linger_task = loop.create_task(self._flush_after_linger())
+            linger_task = loop.create_task(self._flush_after_linger())
+            linger_task.add_done_callback(retrieve_task_exception)
+            self._linger_task = linger_task
 
         return RecordSubmitTicket(ack_fut)
 
@@ -164,11 +172,7 @@ class Producer:
                 e = normalize_exception(e)
                 self._error = e
                 for ack_fut in indexed_ack_futs:
-                    if not ack_fut.done():
-                        ack_fut.set_exception(e)
-                        # Suppress "Future exception was never retrieved" for
-                        # futures the caller never got back (submit raised).
-                        ack_fut.exception()
+                    set_and_retrieve_future_exception(ack_fut, e)
                 raise e
 
             self._unacked.append(
@@ -213,14 +217,16 @@ class Producer:
                 e = normalize_exception(e)
                 self._error = e
                 for ack_fut in unacked.indexed_ack_futs:
-                    if not ack_fut.done():
-                        ack_fut.set_exception(e)
-                # Fail all remaining unacked batches too
-                for remaining in self._unacked:
-                    for ack_fut in remaining.indexed_ack_futs:
-                        if not ack_fut.done():
-                            ack_fut.set_exception(e)
+                    set_and_retrieve_future_exception(ack_fut, e)
+                unacked_batches = tuple(self._unacked)
                 self._unacked.clear()
+                for batch in unacked_batches:
+                    for ack_fut in batch.indexed_ack_futs:
+                        set_and_retrieve_future_exception(ack_fut, e)
+                await asyncio.gather(
+                    *(batch.ticket for batch in unacked_batches),
+                    return_exceptions=True,
+                )
                 return
 
     async def _flush_after_linger(self) -> None:

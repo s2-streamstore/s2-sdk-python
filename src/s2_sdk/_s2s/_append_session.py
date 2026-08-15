@@ -263,17 +263,14 @@ async def _read_ack(
             if next_msg_task in done:
                 return parse_ack(next_msg_task.result())
     finally:
-        if next_msg_task is not None and not next_msg_task.done():
-            next_msg_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await next_msg_task
-        if (
-            deadline_armed_waiter_task is not None
-            and not deadline_armed_waiter_task.done()
-        ):
-            deadline_armed_waiter_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await deadline_armed_waiter_task
+        tasks = tuple(
+            task
+            for task in (next_msg_task, deadline_armed_waiter_task)
+            if task is not None
+        )
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def _body_gen(

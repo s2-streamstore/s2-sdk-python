@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json as json_lib
+import logging
 import ssl
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from typing import Any, NamedTuple
@@ -28,8 +29,11 @@ from s2_sdk._exceptions import (
     TransportError,
     raise_for_412,
     raise_for_416,
+    set_and_retrieve_future_exception,
 )
 from s2_sdk._types import Compression
+
+logger = logging.getLogger(__name__)
 
 _VERSION = version("s2-sdk")
 _USER_AGENT = f"s2-sdk-python/{_VERSION}"
@@ -388,9 +392,9 @@ class ConnectionPool:
 
     def _ensure_reaper(self) -> None:
         if self._reaper_task is None or self._reaper_task.done():
-            self._reaper_task = asyncio.get_running_loop().create_task(
-                self._reap_idle()
-            )
+            reaper_task = asyncio.get_running_loop().create_task(self._reap_idle())
+            reaper_task.add_done_callback(_on_reaper_done)
+            self._reaper_task = reaper_task
 
     async def _reap_idle(self) -> None:
         while not self._closed:
@@ -423,13 +427,23 @@ class ConnectionPool:
         self._closed = True
         if self._reaper_task is not None:
             self._reaper_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._reaper_task
+            await asyncio.gather(self._reaper_task, return_exceptions=True)
         for conns in self._hosts.values():
             for pc in conns:
                 await pc.close()
         self._hosts.clear()
         self._host_locks.clear()
+
+
+def _on_reaper_done(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.warning(
+            "connection pool reaper failed; it will restart on the next pool operation",
+            exc_info=(type(error), error, error.__traceback__),
+        )
 
 
 class Response:
@@ -949,8 +963,7 @@ class Connection:
     def _fail_stream(self, state: _StreamState, e: BaseException) -> None:
         if state.error is None:
             state.error = e
-        if not state.response_headers.done():
-            state.response_headers.set_exception(state.error)
+        set_and_retrieve_future_exception(state.response_headers, state.error)
         if not state.ended.is_set():
             state.data_queue.put_nowait(None)
             state.ended.set()
