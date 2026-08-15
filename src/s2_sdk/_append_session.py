@@ -5,7 +5,12 @@ from collections import deque
 from typing import AsyncIterable, NamedTuple, Self
 
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import S2ClientError, fallible, normalize_exception
+from s2_sdk._exceptions import (
+    S2ClientError,
+    fallible,
+    normalize_exception,
+    set_and_retrieve_future_exception,
+)
 from s2_sdk._s2s._append_session import run_append_session
 from s2_sdk._types import (
     AppendAck,
@@ -149,8 +154,7 @@ class AppendSession:
         self._error = e
         for unacked in self._unacked:
             self._permits.release(unacked.metered_bytes)
-            if not unacked.ack_fut.done():
-                unacked.ack_fut.set_exception(e)
+            set_and_retrieve_future_exception(unacked.ack_fut, e)
         self._unacked.clear()
         # Drain queue
         while not self._input_queue.empty():

@@ -6,7 +6,11 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Self
 
-from s2_sdk._exceptions import S2ClientError, normalize_exception
+from s2_sdk._exceptions import (
+    S2ClientError,
+    normalize_exception,
+    set_and_retrieve_future_exception,
+)
 from s2_sdk._types import ReadBatch, StreamPosition
 
 
@@ -93,8 +97,9 @@ class ReadSession(AsyncIterator[ReadBatch]):
         if self._caught_up_tail is not None:
             caught_up_fut.set_result(_copy_position(self._caught_up_tail))
         elif self._closed:
-            caught_up_fut.set_exception(
-                self._error if self._error is not None else _session_closed_error()
+            set_and_retrieve_future_exception(
+                caught_up_fut,
+                self._error if self._error is not None else _session_closed_error(),
             )
         else:
             self._caught_up_futs.add(caught_up_fut)
@@ -227,10 +232,10 @@ class ReadSession(AsyncIterator[ReadBatch]):
         caught_up_futs = tuple(self._caught_up_futs)
         self._caught_up_futs.clear()
         for caught_up_fut in caught_up_futs:
-            if not caught_up_fut.done():
-                caught_up_fut.set_exception(
-                    self._error if self._error is not None else _session_closed_error()
-                )
+            set_and_retrieve_future_exception(
+                caught_up_fut,
+                self._error if self._error is not None else _session_closed_error(),
+            )
 
         while not self._delivery_queue.empty():
             self._delivery_queue.get_nowait()

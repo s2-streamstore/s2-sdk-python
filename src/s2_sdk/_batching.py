@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import AsyncIterable
 
 from s2_sdk._types import AppendInput, Batching, Record, metered_bytes
@@ -96,10 +95,10 @@ async def append_record_batches(
 
             yield acc.take()
     finally:
-        if next_record_task is not None and not next_record_task.done():
-            next_record_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await next_record_task
+        if next_record_task is not None:
+            if not next_record_task.done():
+                next_record_task.cancel()
+            await asyncio.gather(next_record_task, return_exceptions=True)
 
 
 async def append_inputs(

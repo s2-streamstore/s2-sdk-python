@@ -1,11 +1,35 @@
 from __future__ import annotations
 
+import asyncio
 from functools import wraps
 from inspect import isasyncgenfunction, iscoroutinefunction
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from s2_sdk._types import StreamPosition
+
+
+def set_and_retrieve_future_exception(
+    future: asyncio.Future[Any], exception: BaseException
+) -> None:
+    """Set an exception and immediately mark it as retrieved.
+
+    This prevents `Future.__del__` from reporting
+    "Future exception was never retrieved" when the `Future` is finalized.
+    """
+    if not future.done():
+        future.set_exception(exception)
+        future.exception()
+
+
+def retrieve_task_exception(task: asyncio.Task[Any]) -> None:
+    """Mark the exception as retrieved.
+
+    This prevents `Future.__del__` from reporting
+    "Task exception was never retrieved" when the `Task` is finalized.
+    """
+    if not task.cancelled():
+        task.exception()
 
 
 class S2Error(Exception):
