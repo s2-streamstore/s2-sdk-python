@@ -31,6 +31,7 @@ from s2_sdk._types import (
 class _UnackedBatch:
     ticket: BatchSubmitTicket
     indexed_ack_futs: tuple[asyncio.Future[IndexedAppendAck], ...]
+    indexed_acks_resolved_fut: asyncio.Future[None]
 
 
 class Producer:
@@ -48,17 +49,18 @@ class Producer:
     __slots__ = (
         "_accumulator",
         "_indexed_ack_futs",
-        "_batch_ready",
-        "_closed",
+        "_last_batch_indexed_acks_resolved_fut",
         "_drain_task",
-        "_error",
-        "_final_flush_done",
+        "_drain_task_wakeup",
+        "_batch_submit_lock",
+        "_final_batch_submit_done",
         "_fencing_token",
-        "_flush_lock",
         "_linger_task",
         "_match_seq_num",
         "_unacked",
         "_session",
+        "_closed",
+        "_error",
     )
 
     def __init__(
@@ -87,13 +89,14 @@ class Producer:
         self._accumulator = BatchAccumulator(batching)
 
         self._indexed_ack_futs: list[asyncio.Future[IndexedAppendAck]] = []
-        self._flush_lock = asyncio.Lock()
+        self._batch_submit_lock = asyncio.Lock()
+        self._last_batch_indexed_acks_resolved_fut: asyncio.Future[None] | None = None
         self._linger_task: asyncio.Task[None] | None = None
         self._unacked: deque[_UnackedBatch] = deque()
-        self._batch_ready = asyncio.Event()
+        self._drain_task_wakeup = asyncio.Event()
         self._drain_task = asyncio.get_running_loop().create_task(self._drain_acks())
         self._closed = False
-        self._final_flush_done = False
+        self._final_batch_submit_done = False
         self._error: BaseException | None = None
 
     @fallible
@@ -114,13 +117,26 @@ class Producer:
         first_in_batch = self._accumulator.is_empty()
         self._accumulator.add(record)
         if self._accumulator.is_full():
-            await self._flush()
+            await self._submit_batch_now()
         elif first_in_batch and self._accumulator.linger > 0:
-            linger_task = loop.create_task(self._flush_after_linger())
+            linger_task = loop.create_task(self._submit_batch_after_linger())
             linger_task.add_done_callback(retrieve_task_exception_if_present)
             self._linger_task = linger_task
 
         return RecordSubmitTicket(ack_fut)
+
+    @fallible
+    async def flush(self) -> None:
+        """Wait for all submitted records to be appended."""
+        if self._closed:
+            raise S2ClientError("Producer is closed")
+        if self._error is not None:
+            raise self._error
+
+        await self._submit_batch_now()
+        indexed_acks_resolved_fut = self._last_batch_indexed_acks_resolved_fut
+        if indexed_acks_resolved_fut is not None:
+            await asyncio.shield(indexed_acks_resolved_fut)
 
     @fallible
     async def close(self) -> None:
@@ -129,11 +145,11 @@ class Producer:
             return
         self._closed = True
         try:
-            await self._flush()
+            await self._submit_batch_now()
             await self._session.close()
         finally:
-            self._final_flush_done = True
-            self._batch_ready.set()
+            self._final_batch_submit_done = True
+            self._drain_task_wakeup.set()
             await self._drain_task
         if self._error is not None:
             raise self._error
@@ -145,12 +161,12 @@ class Producer:
         await self.close()
         return False
 
-    async def _flush(self) -> None:
+    async def _submit_batch_now(self) -> None:
         await self._cancel_linger_task()
         await self._submit_accumulated_records()
 
     async def _submit_accumulated_records(self) -> None:
-        async with self._flush_lock:
+        async with self._batch_submit_lock:
             if self._accumulator.is_empty():
                 return
 
@@ -175,10 +191,18 @@ class Producer:
                     set_and_retrieve_future_exception(ack_fut, e)
                 raise e
 
-            self._unacked.append(
-                _UnackedBatch(ticket=ticket, indexed_ack_futs=indexed_ack_futs)
+            indexed_acks_resolved_fut: asyncio.Future[None] = (
+                asyncio.get_running_loop().create_future()
             )
-            self._batch_ready.set()
+            self._unacked.append(
+                _UnackedBatch(
+                    ticket=ticket,
+                    indexed_ack_futs=indexed_ack_futs,
+                    indexed_acks_resolved_fut=indexed_acks_resolved_fut,
+                )
+            )
+            self._last_batch_indexed_acks_resolved_fut = indexed_acks_resolved_fut
+            self._drain_task_wakeup.set()
 
     async def _cancel_linger_task(self) -> None:
         linger_task = self._linger_task
@@ -192,15 +216,14 @@ class Producer:
             await linger_task
 
     async def _drain_acks(self) -> None:
-        """Single background task that resolves batches in FIFO order."""
         while True:
             while not self._unacked:
-                if self._closed and self._final_flush_done:
+                if self._closed and self._final_batch_submit_done:
                     return
-                self._batch_ready.clear()
+                self._drain_task_wakeup.clear()
                 if self._unacked:
                     break
-                await self._batch_ready.wait()
+                await self._drain_task_wakeup.wait()
 
             unacked = self._unacked.popleft()
             try:
@@ -213,23 +236,29 @@ class Producer:
                                 batch=ack,
                             )
                         )
+                if not unacked.indexed_acks_resolved_fut.done():
+                    unacked.indexed_acks_resolved_fut.set_result(None)
             except BaseException as e:
                 e = normalize_exception(e)
                 self._error = e
                 for ack_fut in unacked.indexed_ack_futs:
                     set_and_retrieve_future_exception(ack_fut, e)
+                set_and_retrieve_future_exception(unacked.indexed_acks_resolved_fut, e)
                 unacked_batches = tuple(self._unacked)
                 self._unacked.clear()
                 for batch in unacked_batches:
                     for ack_fut in batch.indexed_ack_futs:
                         set_and_retrieve_future_exception(ack_fut, e)
+                    set_and_retrieve_future_exception(
+                        batch.indexed_acks_resolved_fut, e
+                    )
                 await asyncio.gather(
                     *(batch.ticket for batch in unacked_batches),
                     return_exceptions=True,
                 )
                 return
 
-    async def _flush_after_linger(self) -> None:
+    async def _submit_batch_after_linger(self) -> None:
         assert self._accumulator.linger is not None
         await asyncio.sleep(self._accumulator.linger)
         self._linger_task = None
