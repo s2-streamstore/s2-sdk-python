@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json as json_lib
+import logging
 import ssl
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from importlib.metadata import version
 from typing import Any, NamedTuple
@@ -28,8 +29,11 @@ from s2_sdk._exceptions import (
     TransportError,
     raise_for_412,
     raise_for_416,
+    set_and_retrieve_future_exception,
 )
 from s2_sdk._types import Compression
+
+logger = logging.getLogger(__name__)
 
 _VERSION = version("s2-sdk")
 _USER_AGENT = f"s2-sdk-python/{_VERSION}"
@@ -37,7 +41,7 @@ _USER_AGENT = f"s2-sdk-python/{_VERSION}"
 DEFAULT_MAX_STREAMS_PER_CONN = 100
 IDLE_TIMEOUT = 90.0
 REAPER_INTERVAL = 30.0
-_DRAIN_BUFFER_THRESHOLD = 65536  # 64 KiB — drain when write buffer exceeds this
+_MAX_BYTES_BETWEEN_DRAINS = 65536  # 64 KiB (TODO: revisit)
 _INITIAL_WINDOW_SIZE = 10 * 1024 * 1024  # 10 MiB — stream-level flow control window
 _ACK_THRESHOLD = 10 * 1024  # 10 KiB — ack frequently to keep window open
 
@@ -388,9 +392,9 @@ class ConnectionPool:
 
     def _ensure_reaper(self) -> None:
         if self._reaper_task is None or self._reaper_task.done():
-            self._reaper_task = asyncio.get_running_loop().create_task(
-                self._reap_idle()
-            )
+            reaper_task = asyncio.get_running_loop().create_task(self._reap_idle())
+            reaper_task.add_done_callback(_on_reaper_done)
+            self._reaper_task = reaper_task
 
     async def _reap_idle(self) -> None:
         while not self._closed:
@@ -423,13 +427,23 @@ class ConnectionPool:
         self._closed = True
         if self._reaper_task is not None:
             self._reaper_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._reaper_task
+            await asyncio.gather(self._reaper_task, return_exceptions=True)
         for conns in self._hosts.values():
             for pc in conns:
                 await pc.close()
         self._hosts.clear()
         self._host_locks.clear()
+
+
+def _on_reaper_done(task: asyncio.Task[None]) -> None:
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.warning(
+            "connection pool reaper failed; it will restart on the next pool operation",
+            exc_info=(type(error), error, error.__traceback__),
+        )
 
 
 class Response:
@@ -591,7 +605,9 @@ class Connection:
         "_closed",
         "_goaway_received",
         "_recv_dead",
+        "_send_dead",
         "_settings_received",
+        "_bytes_since_drain",
     )
 
     def __init__(
@@ -615,7 +631,9 @@ class Connection:
         self._closed = False
         self._goaway_received = False
         self._recv_dead = False
+        self._send_dead = False
         self._settings_received = asyncio.Event()
+        self._bytes_since_drain = 0
 
     async def connect(self) -> None:
         try:
@@ -654,13 +672,10 @@ class Connection:
         self._h2.increment_flow_control_window(
             _INITIAL_WINDOW_SIZE - 65535,  # delta from RFC default
         )
-        self._flush_h2_data_sync()
-        assert self._writer is not None
-        await self._writer.drain()
+        await self._flush(force=True)
         self._recv_task = asyncio.get_running_loop().create_task(self._recv_loop())
 
     def reserve_stream(self) -> _StreamState:
-        """Reserve per-connection capacity for a future outbound stream."""
         state = _StreamState()
         self._pending_streams[id(state)] = state
         return state
@@ -671,7 +686,6 @@ class Connection:
         headers: list[tuple[str, str]],
         end_stream: bool = False,
     ) -> int:
-        """Atomically allocate a stream ID and send request headers."""
         assert self._h2 is not None
         async with self._write_lock:
             if state.error is not None:
@@ -683,7 +697,7 @@ class Connection:
             self._streams[stream_id] = state
             try:
                 self._h2.send_headers(stream_id, headers, end_stream=end_stream)
-                await self._flush_h2_data_and_drain()
+                await self._flush(force=True)
             except (asyncio.CancelledError, Exception):
                 self._streams.pop(stream_id, None)
                 raise
@@ -696,11 +710,6 @@ class Connection:
         end_stream: bool = False,
         on_write: Callable[[], None] | None = None,
     ) -> None:
-        """Send data on a stream, respecting flow control windows.
-
-        Chunks by flow control window + max frame size. If ``on_write`` is
-        provided, it is called after each chunk is flushed to the socket.
-        """
         assert self._h2 is not None
         offset = 0
         while offset < len(data):
@@ -723,7 +732,7 @@ class Connection:
                         chunk,
                         end_stream=end_stream and is_last_chunk,
                     )
-                    await self._flush_h2_data()
+                    await self._flush()
                     offset += chunk_size
                     sent = True
 
@@ -748,48 +757,43 @@ class Connection:
         if not data and end_stream:
             async with self._write_lock:
                 self._h2.send_data(stream_id, b"", end_stream=True)
-                await self._flush_h2_data_and_drain()
+                await self._flush(force=True)
             if on_write:
                 on_write()
 
     async def end_stream(self, stream_id: int) -> None:
-        """Send END_STREAM on a stream."""
         assert self._h2 is not None
         async with self._write_lock:
             self._h2.send_data(stream_id, b"", end_stream=True)
-            await self._flush_h2_data_and_drain()
+            await self._flush(force=True)
 
     async def ack_data(self, stream_id: int, nbytes: int) -> None:
-        """Acknowledge received data to update the flow control window."""
         assert self._h2 is not None
         async with self._write_lock:
             self._h2.acknowledge_received_data(nbytes, stream_id)
-            await self._flush_h2_data()
+            await self._flush()
 
     async def ack_all_data(self, stream_id: int, state: _StreamState) -> None:
-        """Acknowledge all received data for stream cleanup."""
         assert self._h2 is not None
         async with self._write_lock:
             nbytes = state.unacked_flow_bytes
             state.unacked_flow_bytes = 0
             if nbytes > 0:
                 self._h2.acknowledge_received_data(nbytes, stream_id)
-                await self._flush_h2_data()
+                await self._flush()
 
     async def reset_stream(self, stream_id: int) -> None:
-        """Send RST_STREAM to tell the peer to stop sending."""
         assert self._h2 is not None
         try:
             async with self._write_lock:
                 self._h2.reset_stream(stream_id)
-                await self._flush_h2_data_and_drain()
+                await self._flush(force=True)
         except Exception:
             pass  # Best effort
 
     def release_stream(
         self, stream_id: int | None, state: _StreamState | None = None
     ) -> None:
-        """Clean up active or reserved stream state."""
         if stream_id is not None:
             self._streams.pop(stream_id, None)
         if state is not None:
@@ -797,8 +801,12 @@ class Connection:
 
     @property
     def is_available(self) -> bool:
-        """Connection is usable for new streams."""
-        return not self._closed and not self._goaway_received and not self._recv_dead
+        return (
+            not self._closed
+            and not self._goaway_received
+            and not self._recv_dead
+            and not self._send_dead
+        )
 
     @property
     def max_concurrent_streams(self) -> int:
@@ -823,7 +831,7 @@ class Connection:
             try:
                 async with self._write_lock:
                     self._h2.close_connection()
-                    await self._flush_h2_data_and_drain()
+                    await self._flush(force=True)
             except Exception:
                 pass
 
@@ -836,42 +844,34 @@ class Connection:
 
         if self._writer is not None:
             try:
+                self._send_dead = True
                 self._writer.close()
                 await self._writer.wait_closed()
             except Exception:
                 pass
 
-    def _flush_h2_data_sync(self) -> None:
-        """Write pending h2 bytes to socket. Must be called under _write_lock or during init."""
+    async def _flush(self, *, force: bool = False) -> None:
         assert self._h2 is not None
         assert self._writer is not None
-        data = self._h2.data_to_send()
-        if data:
-            self._writer.write(data)
+        if self._send_dead:
+            raise ConnectionClosedError("Connection is closed")
 
-    async def _flush_h2_data(self) -> None:
-        """Write pending h2 bytes, draining only when the buffer is large.
+        try:
+            data = self._h2.data_to_send()
+            if data:
+                self._writer.write(data)
+                self._bytes_since_drain += len(data)
 
-        This allows small writes to coalesce in the kernel buffer, reducing
-        the number of syscalls and await-points on high-rate paths.
-        """
-        assert self._writer is not None
-        self._flush_h2_data_sync()
-        transport = self._writer.transport
-        if (
-            transport is not None
-            and transport.get_write_buffer_size() >= _DRAIN_BUFFER_THRESHOLD
-        ):
+            if not force and self._bytes_since_drain < _MAX_BYTES_BETWEEN_DRAINS:
+                return
+
             await self._writer.drain()
-
-    async def _flush_h2_data_and_drain(self) -> None:
-        """Write pending h2 bytes and unconditionally drain the socket."""
-        assert self._writer is not None
-        self._flush_h2_data_sync()
-        await self._writer.drain()
+            self._bytes_since_drain = 0
+        except OSError as e:
+            self._send_dead = True
+            raise ConnectionClosedError(str(e)) from e
 
     async def _recv_loop(self) -> None:
-        """Background task: read from socket, feed to h2, dispatch events."""
         assert self._reader is not None
         assert self._h2 is not None
         try:
@@ -890,7 +890,7 @@ class Connection:
                     for event in events:
                         self._handle_event(event)
                     # Flush h2 data generated by event handling (e.g. window update ACKs)
-                    await self._flush_h2_data()
+                    await self._flush()
         except Exception as e:
             if not self._closed:
                 self._fail_all_streams(ConnectionClosedError(f"recv_loop error: {e}"))
@@ -963,8 +963,7 @@ class Connection:
     def _fail_stream(self, state: _StreamState, e: BaseException) -> None:
         if state.error is None:
             state.error = e
-        if not state.response_headers.done():
-            state.response_headers.set_exception(state.error)
+        set_and_retrieve_future_exception(state.response_headers, state.error)
         if not state.ended.is_set():
             state.data_queue.put_nowait(None)
             state.ended.set()
@@ -983,7 +982,6 @@ async def _drain_body(
     content: Any,
     on_write: Any | None,
 ) -> None:
-    """Drain an async generator body into h2 send_data calls."""
     try:
         async for chunk in content:
             await conn.send_data(stream_id, chunk, on_write=on_write)

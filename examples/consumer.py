@@ -17,7 +17,7 @@ ACCOUNT_ENDPOINT = os.getenv("S2_ACCOUNT_ENDPOINT")
 BASIN_ENDPOINT = os.getenv("S2_BASIN_ENDPOINT")
 
 
-async def consumer():
+async def main():
     endpoints = (
         Endpoints(account=ACCOUNT_ENDPOINT, basin=BASIN_ENDPOINT)
         if ACCOUNT_ENDPOINT and BASIN_ENDPOINT
@@ -37,4 +37,4 @@ async def consumer():
 
 
 if __name__ == "__main__":
-    asyncio.run(consumer())
+    asyncio.run(main(), debug=True)
