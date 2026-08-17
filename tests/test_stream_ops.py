@@ -687,6 +687,38 @@ class TestStreamOperations:
         assert ack0.batch is not ack1.batch
         assert ack1.batch is not ack2.batch
 
+    async def test_producer_flush_submits_partial_batch_and_resolves_prior_record_tickets(
+        self, stream: S2Stream
+    ):
+        async with stream.producer(
+            batching=Batching(max_records=2, linger=timedelta(0))
+        ) as p:
+            t0 = await p.submit(Record(body=b"lorem"))
+            t1 = await p.submit(Record(body=b"ipsum"))
+            t2 = await p.submit(Record(body=b"dolor"))
+
+            await p.flush()
+
+            assert t0._ack_fut.done()
+            assert t1._ack_fut.done()
+            assert t2._ack_fut.done()
+
+            ack0 = await t0
+            ack1 = await t1
+            ack2 = await t2
+
+            assert ack0.seq_num == 0
+            assert ack1.seq_num == 1
+            assert ack2.seq_num == 2
+            assert ack0.batch is ack1.batch
+            assert ack1.batch is not ack2.batch
+
+            t3 = await p.submit(Record(body=b"sit"))
+
+        ack3 = await t3
+        assert ack3.seq_num == 3
+        assert ack2.batch is not ack3.batch
+
     async def test_producer_nonexistent_stream_errors(self, shared_basin: S2Basin):
         nonexistent = shared_basin.stream("nonexistent-stream-xyz")
 
