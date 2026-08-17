@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.7.2...v0.8.0) (2026-08-17)
+
+
+### Features
+
+* add `flush` method to `Producer` ([#103](https://github.com/s2-streamstore/s2-sdk-python/issues/103)) ([4b896b7](https://github.com/s2-streamstore/s2-sdk-python/commit/4b896b7433f1eb51e1e62385b42be73b2cef5153))
+
 ## [0.7.2](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.7.1...v0.7.2) (2026-08-15)
 
 
