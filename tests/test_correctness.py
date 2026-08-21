@@ -38,7 +38,7 @@ async def test_gapless_seq_nums_and_record_order_during_concurrent_append_and_re
         last_seq_num: int | None = None
         num_records_read = 0
 
-        async with stream.read_session(start=SeqNum(0), wait=60) as session:
+        async with stream.read_session(start=SeqNum(0)) as session:
             async for batch in session:
                 for record in batch.records:
                     seq_num = record.seq_num
@@ -89,7 +89,7 @@ async def test_read_session_reports_caught_up_after_delivering_tail(stream: S2St
         AppendInput(records=[Record(body=b"first"), Record(body=b"second")])
     )
 
-    async with stream.read_session(start=TailOffset(2), wait=60) as session:
+    async with stream.read_session(start=TailOffset(2)) as session:
         caught_up = session.caught_up()
         records = []
 
