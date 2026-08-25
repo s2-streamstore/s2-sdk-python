@@ -62,25 +62,6 @@ def frame_message(msg: Message) -> bytes:
     return struct.pack(">I", msg_len)[1:] + bytes([flag]) + msg.body
 
 
-def deframe_data(data: bytes) -> Message:
-    if len(data) < 4:
-        raise ValueError("Message too short")
-
-    msg_len = int.from_bytes(data[0:3], "big")  # flag + body
-    flag = data[3]
-
-    terminal = bool(flag & _TERMINAL_BIT)
-    code = (flag & _COMPRESSION_MASK) >> _COMPRESSION_SHIFT
-    compression = _COMPRESSION_FROM_CODE.get(code, Compression.NONE)
-
-    body_len = msg_len - _FLAG_LEN
-    body = data[4 : 4 + body_len]
-    if len(body) < body_len:
-        raise ValueError("Incomplete message body")
-
-    return Message(body, terminal, compression)
-
-
 async def read_messages(
     byte_stream: AsyncIterator[bytes],
 ) -> AsyncIterator[bytes]:
