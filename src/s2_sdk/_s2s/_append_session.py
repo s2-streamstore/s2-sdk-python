@@ -11,10 +11,17 @@ from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._mappers import append_ack_from_proto, append_input_to_proto
-from s2_sdk._retrier import Attempt, compute_backoff, is_safe_to_retry_session
+from s2_sdk._retrier import (
+    AdvisedReconnects,
+    Attempt,
+    compute_backoff,
+    is_planned_reconnect,
+    is_safe_to_retry_session,
+)
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import (
     Message,
+    ReceivedMessage,
     frame_message,
     maybe_compress,
     parse_error_info,
@@ -72,13 +79,15 @@ async def run_append_session(
         min_base_delay = retry.min_base_delay.total_seconds()
         max_base_delay = retry.max_base_delay.total_seconds()
         attempt = Attempt(0)
+        advised_reconnects = AdvisedReconnects()
+        input_closed = asyncio.Event()
         try:
             while True:
                 try:
                     resend_inputs = tuple(inflight_inputs)
                     if frame_signal is not None:
                         frame_signal.reset()
-                    await _run_attempt(
+                    reconnect = await _run_attempt(
                         client,
                         stream_name,
                         attempt,
@@ -89,10 +98,23 @@ async def run_append_session(
                         compression,
                         frame_signal,
                         ack_timeout,
+                        advised_reconnects,
+                        input_closed,
                         encryption_key,
                     )
+                    if reconnect and not input_closed.is_set():
+                        advised_reconnects.record()
+                        logger.debug("reconnecting append session on server advice")
+                        continue
                     return
                 except Exception as e:
+                    planned = is_planned_reconnect(e)
+                    if planned and input_closed.is_set() and not inflight_inputs:
+                        return
+                    if planned:
+                        advised_reconnects.record()
+                        logger.debug("reconnecting append session while server drains")
+                        continue
                     if attempt.value < max_retries and is_safe_to_retry_session(
                         e,
                         retry.append_retry_policy,
@@ -143,8 +165,10 @@ async def _run_attempt(
     compression: Compression,
     frame_signal: FrameSignal | None,
     ack_timeout: float,
+    advised_reconnects: AdvisedReconnects,
+    input_closed: asyncio.Event,
     encryption_key: str | None = None,
-) -> None:
+) -> bool:
     headers = {
         "content-type": "s2s/proto",
         "accept": "s2s/proto",
@@ -153,6 +177,7 @@ async def _run_attempt(
         headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
 
     ack_deadline_armed = asyncio.Event()
+    reconnect = asyncio.Event()
     for resend_inp in resend_inputs:
         resend_inp.ack_deadline = None
 
@@ -167,6 +192,8 @@ async def _run_attempt(
             compression,
             ack_deadline_armed,
             ack_timeout,
+            reconnect,
+            input_closed,
         ),
         frame_signal=frame_signal,
     ) as response:
@@ -176,18 +203,29 @@ async def _run_attempt(
 
         prev_ack_end: int | None = None
         resend_remaining = len(resend_inputs)
+        advice_seen = False
 
         messages = read_messages(response.aiter_bytes())
         while True:
             try:
-                ack = await _read_ack(
-                    messages,
-                    inflight_inputs,
-                    ack_deadline_armed,
-                )
+                read_ack = _read_ack(messages, inflight_inputs, ack_deadline_armed)
+                if reconnect.is_set() and not inflight_inputs:
+                    message = await asyncio.wait_for(read_ack, timeout=ack_timeout)
+                else:
+                    message = await read_ack
             except StopAsyncIteration:
                 break
+            except asyncio.TimeoutError:
+                raise ReadTimeoutError("Append session ack timeout") from None
 
+            if message.reconnect_advised and not advice_seen:
+                advice_seen = True
+                response.poison_connection()
+                if advised_reconnects.should_reconnect():
+                    reconnect.set()
+
+            ack = pb.AppendAck()
+            ack.ParseFromString(message.body)
             if attempt.value > 0:
                 attempt.value = 0
             if ack.end.seq_num < ack.start.seq_num:
@@ -220,18 +258,14 @@ async def _run_attempt(
                 f"Append session response stream closed with {len(inflight_inputs)} "
                 "unacknowledged batches"
             )
+        return reconnect.is_set()
 
 
 async def _read_ack(
-    messages: AsyncIterator[bytes],
+    messages: AsyncIterator[ReceivedMessage],
     inflight_inputs: deque[_InflightInput],
     deadline_armed: asyncio.Event,
-) -> pb.AppendAck:
-    def parse_ack(msg_body: bytes) -> pb.AppendAck:
-        ack = pb.AppendAck()
-        ack.ParseFromString(msg_body)
-        return ack
-
+) -> ReceivedMessage:
     next_msg_task: asyncio.Task[Any] | None = None
     deadline_armed_waiter_task: asyncio.Task[Any] | None = None
     try:
@@ -241,10 +275,10 @@ async def _read_ack(
                 try:
                     async with asyncio.timeout_at(deadline):
                         if next_msg_task is not None:
-                            msg_body = await next_msg_task
+                            message = await next_msg_task
                         else:
-                            msg_body = await messages.__anext__()
-                        return parse_ack(msg_body)
+                            message = await messages.__anext__()
+                        return message
                 except TimeoutError:
                     raise ReadTimeoutError("Append session ack timeout") from None
 
@@ -261,7 +295,7 @@ async def _read_ack(
                 with suppress(asyncio.CancelledError):
                     await deadline_armed_waiter_task
             if next_msg_task in done:
-                return parse_ack(next_msg_task.result())
+                return next_msg_task.result()
     finally:
         tasks = tuple(
             task
@@ -280,6 +314,8 @@ async def _body_gen(
     compression: Compression,
     ack_deadline_armed: asyncio.Event,
     ack_timeout: float,
+    reconnect: asyncio.Event,
+    input_closed: asyncio.Event,
 ) -> AsyncGenerator[bytes]:
     loop = asyncio.get_running_loop()
     if resend_inputs:
@@ -295,9 +331,28 @@ async def _body_gen(
         logger.debug("finished resending unacknowledged appends")
 
     while True:
-        inp = await input_queue.get()
+        if reconnect.is_set():
+            return
+        try:
+            inp = input_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            input_task = asyncio.create_task(input_queue.get())
+            reconnect_task = asyncio.create_task(reconnect.wait())
+            try:
+                await asyncio.wait(
+                    {input_task, reconnect_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if not input_task.done():
+                    return
+                inp = input_task.result()
+            finally:
+                input_task.cancel()
+                reconnect_task.cancel()
+                await asyncio.gather(input_task, reconnect_task, return_exceptions=True)
         if inp is None:
             await input_queue.put(None)
+            input_closed.set()
             return
         encoded = _encode_input(inp, compression)
         ack_deadline = loop.time() + ack_timeout

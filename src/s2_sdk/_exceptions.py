@@ -173,12 +173,24 @@ class ConnectionClosedError(TransportError):
     """Connection closed unexpectedly."""
 
 
+class ReconnectAdvisedError(TransportError):
+    """A pooled connection is draining and must not accept a new stream."""
+
+
 class ProtocolError(TransportError):
     """HTTP/2 protocol error (RST_STREAM, GOAWAY)."""
 
     def __init__(self, message: str, error_code: int | None = None):
         self.error_code = error_code
         super().__init__(message)
+
+
+def is_server_draining(e: BaseException) -> bool:
+    return (
+        isinstance(e, S2ServerError)
+        and e.status_code == 503
+        and e.code == "server_draining"
+    )
 
 
 def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:

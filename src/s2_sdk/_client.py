@@ -24,9 +24,11 @@ from s2_sdk._exceptions import (
     ConnectionClosedError,
     ProtocolError,
     ReadTimeoutError,
+    ReconnectAdvisedError,
     S2ClientError,
     S2ServerError,
     TransportError,
+    is_server_draining,
     raise_for_412,
     raise_for_416,
     set_and_retrieve_future_exception,
@@ -169,6 +171,12 @@ class HttpClient:
                 )
 
             response = Response(status_code, resp_body, resp_headers)
+            retry_after_ms = _header_value(resp_headers, "retry-after-ms")
+            _raise_for_status(response, retry_after_ms=retry_after_ms)
+        except S2ServerError as e:
+            if is_server_draining(e):
+                pc.poison()
+            raise
         except TransportError:
             raise
         except asyncio.TimeoutError:
@@ -183,9 +191,8 @@ class HttpClient:
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
             pc.touch_idle()
-
-        retry_after_ms = _header_value(resp_headers, "retry-after-ms")
-        _raise_for_status(response, retry_after_ms=retry_after_ms)
+            if pc.is_poisoned and pc.is_idle:
+                await pc.close()
         return response
 
     @asynccontextmanager
@@ -250,8 +257,13 @@ class HttpClient:
                 ended=state.ended,
                 stream_state=state,
                 ack=_ack_stream_data,
+                poison=pc.poison,
             )
             yield response
+        except S2ServerError as e:
+            if is_server_draining(e):
+                pc.poison()
+            raise
         except TransportError:
             raise
         except asyncio.TimeoutError:
@@ -273,6 +285,8 @@ class HttpClient:
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
             pc.touch_idle()
+            if pc.is_poisoned and pc.is_idle:
+                await pc.close()
 
     def _build_headers(
         self,
@@ -403,7 +417,10 @@ class ConnectionPool:
             for base_url, conns in tuple(self._hosts.items()):
                 to_close: list[_PooledConnection] = []
                 for pc in conns:
-                    if not pc._conn.is_available:
+                    if pc.is_poisoned:
+                        if pc.is_idle:
+                            to_close.append(pc)
+                    elif not pc._conn.is_available:
                         to_close.append(pc)
                     elif (
                         pc.is_idle
@@ -475,6 +492,7 @@ class StreamingResponse:
         "_stream_state",
         "_buf",
         "_ack",
+        "_poison",
     )
 
     def __init__(
@@ -484,6 +502,7 @@ class StreamingResponse:
         ended: asyncio.Event,
         stream_state: Any,
         ack: Callable[[int], Any] | None = None,
+        poison: Callable[[], None] | None = None,
     ) -> None:
         self.status_code = status_code
         self._data_queue = data_queue
@@ -491,6 +510,11 @@ class StreamingResponse:
         self._stream_state = stream_state
         self._buf = bytearray()
         self._ack = ack
+        self._poison = poison
+
+    def poison_connection(self) -> None:
+        if self._poison is not None:
+            self._poison()
 
     async def aread(self) -> bytes:
         chunks: list[bytes] = []
@@ -543,16 +567,18 @@ class StreamingResponse:
 
 
 class _PooledConnection:
-    __slots__ = ("_conn", "_idle_since")
+    __slots__ = ("_conn", "_idle_since", "_poisoned")
 
     def __init__(self, conn: Connection) -> None:
         self._conn = conn
         self._idle_since: float | None = None
+        self._poisoned = False
 
     @property
     def has_capacity(self) -> bool:
         return (
-            self._conn.is_available
+            not self._poisoned
+            and self._conn.is_available
             and self._conn._settings_received.is_set()
             and self._conn.open_stream_count < self._conn.max_concurrent_streams
         )
@@ -560,6 +586,14 @@ class _PooledConnection:
     @property
     def is_idle(self) -> bool:
         return self._conn.open_stream_count == 0
+
+    @property
+    def is_poisoned(self) -> bool:
+        return self._poisoned
+
+    def poison(self) -> None:
+        self._poisoned = True
+        self._conn.poison()
 
     def touch_idle(self) -> None:
         if self._conn.open_stream_count == 0:
@@ -603,6 +637,7 @@ class Connection:
         "_pending_streams",
         "_recv_task",
         "_closed",
+        "_poisoned",
         "_goaway_received",
         "_recv_dead",
         "_send_dead",
@@ -629,6 +664,7 @@ class Connection:
         self._pending_streams: dict[int, _StreamState] = {}
         self._recv_task: asyncio.Task[None] | None = None
         self._closed = False
+        self._poisoned = False
         self._goaway_received = False
         self._recv_dead = False
         self._send_dead = False
@@ -679,6 +715,14 @@ class Connection:
         state = _StreamState()
         self._pending_streams[id(state)] = state
         return state
+
+    def poison(self) -> None:
+        if self._poisoned:
+            return
+        self._poisoned = True
+        error = ReconnectAdvisedError("Connection is draining")
+        for state in self._pending_streams.values():
+            self._fail_stream(state, error)
 
     async def send_headers(
         self,
@@ -803,10 +847,15 @@ class Connection:
     def is_available(self) -> bool:
         return (
             not self._closed
+            and not self._poisoned
             and not self._goaway_received
             and not self._recv_dead
             and not self._send_dead
         )
+
+    @property
+    def is_poisoned(self) -> bool:
+        return self._poisoned
 
     @property
     def max_concurrent_streams(self) -> int:

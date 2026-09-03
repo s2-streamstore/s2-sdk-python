@@ -214,6 +214,7 @@ async def test_unary_request_timeout_acks_and_resets_stream():
 
     pc = MagicMock()
     pc._conn = conn
+    pc.is_poisoned = False
     pc.touch_idle = MagicMock()
 
     pool = MagicMock()

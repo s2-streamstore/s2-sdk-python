@@ -2,9 +2,10 @@
 
 Message layout: [3 bytes: length] [1 byte: flag] [N bytes: body]
   The 3-byte length covers flag + body (i.e. everything after the length prefix).
-Flag byte: [T][CC][RRRRR]
+Flag byte: [T][CC][A][RRRR]
   T  = terminal (1 = last message)
   CC = compression (00=none, 01=zstd, 10=gzip)
+  A  = reconnect advised
   R  = reserved
 Terminal body: [2 bytes: status code big-endian] [JSON error]
 """
@@ -31,6 +32,11 @@ class Message(NamedTuple):
     compression: Compression
 
 
+class ReceivedMessage(NamedTuple):
+    body: bytes
+    reconnect_advised: bool
+
+
 # Compression threshold (1 KiB)
 COMPRESSION_THRESHOLD = 1024
 
@@ -38,6 +44,7 @@ COMPRESSION_THRESHOLD = 1024
 _TERMINAL_BIT = 0b1000_0000
 _COMPRESSION_MASK = 0b0110_0000
 _COMPRESSION_SHIFT = 5
+_RECONNECT_ADVISED_BIT = 0b0001_0000
 
 # Length of the flag field in bytes
 _FLAG_LEN = 1
@@ -83,7 +90,7 @@ def deframe_data(data: bytes) -> Message:
 
 async def read_messages(
     byte_stream: AsyncIterator[bytes],
-) -> AsyncIterator[bytes]:
+) -> AsyncIterator[ReceivedMessage]:
     buf = bytearray()
     while True:
         try:
@@ -102,6 +109,7 @@ async def read_messages(
 
             flag = buf[3]
             terminal = bool(flag & _TERMINAL_BIT)
+            reconnect_advised = not terminal and bool(flag & _RECONNECT_ADVISED_BIT)
             compression_code = (flag & _COMPRESSION_MASK) >> _COMPRESSION_SHIFT
             compression = _COMPRESSION_FROM_CODE.get(compression_code, Compression.NONE)
             body = bytes(buf[4:frame_len])
@@ -114,7 +122,7 @@ async def read_messages(
             if compression != Compression.NONE:
                 body = decompress(body, compression)
 
-            yield body
+            yield ReceivedMessage(body, reconnect_advised)
 
 
 def maybe_compress(body: bytes, compression: Compression) -> tuple[bytes, Compression]:
