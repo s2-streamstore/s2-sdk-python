@@ -227,11 +227,13 @@ async def _run_attempt(
         messages = read_messages(response.aiter_bytes())
         while True:
             try:
-                pending_ack = _read_ack(messages, inflight_inputs, ack_deadline_armed)
+                read_ack_coro = _read_ack(messages, inflight_inputs, ack_deadline_armed)
                 if reconnect.is_set() and not inflight_inputs:
-                    read_ack = await asyncio.wait_for(pending_ack, timeout=ack_timeout)
+                    read_ack = await asyncio.wait_for(
+                        read_ack_coro, timeout=ack_timeout
+                    )
                 else:
-                    read_ack = await pending_ack
+                    read_ack = await read_ack_coro
             except StopAsyncIteration:
                 break
             except asyncio.TimeoutError:
