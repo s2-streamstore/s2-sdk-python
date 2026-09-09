@@ -15,7 +15,13 @@ from s2_sdk._read_session import (
     _ReadSessionHeartbeat,
     _ReadSessionRetrying,
 )
-from s2_sdk._retrier import Attempt, compute_backoff, http_retry_on
+from s2_sdk._retrier import (
+    AdvisedReconnectLimiter,
+    Attempt,
+    compute_backoff,
+    http_retry_on,
+    requires_reconnect,
+)
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
@@ -49,6 +55,7 @@ async def run_read_session(
     min_base_delay = retry.min_base_delay.total_seconds()
     max_base_delay = retry.max_base_delay.total_seconds()
     attempt = Attempt(0)
+    advised_reconnect_limiter = AdvisedReconnectLimiter()
 
     remaining_count = limit.count if limit and limit.count is not None else None
     remaining_bytes = limit.bytes if limit and limit.bytes is not None else None
@@ -63,6 +70,7 @@ async def run_read_session(
         if wait is not None:
             params["wait"] = _remaining_wait(wait, last_tail_at)
 
+        reconnect = False
         try:
             async with client.streaming_request(
                 "GET",
@@ -75,9 +83,10 @@ async def run_read_session(
                     raise parse_error_info(body, response.status_code)
 
                 messages = read_messages(response.aiter_bytes())
+                reconnect_advice_seen = False
                 while True:
                     try:
-                        message_body = await asyncio.wait_for(
+                        message = await asyncio.wait_for(
                             messages.__anext__(), timeout=_HEARTBEAT_TIMEOUT
                         )
                     except StopAsyncIteration:
@@ -88,8 +97,16 @@ async def run_read_session(
                     if attempt.value > 0:
                         attempt.value = 0
 
+                    reconnect_after_delivery = False
+                    if message.reconnect_advised and not reconnect_advice_seen:
+                        reconnect_advice_seen = True
+                        response.retire_connection()
+                        reconnect_after_delivery = (
+                            advised_reconnect_limiter.try_acquire()
+                        )
+
                     proto_batch = pb.ReadBatch()
-                    proto_batch.ParseFromString(message_body)
+                    proto_batch.ParseFromString(message.body)
                     batch = read_batch_from_proto(proto_batch)
 
                     if batch.tail is not None:
@@ -111,6 +128,10 @@ async def run_read_session(
                                 remaining_bytes - metered_bytes(batch.records), 0
                             )
                             params["bytes"] = remaining_bytes
+                    elif batch.tail is not None:
+                        params["seq_num"] = batch.tail.seq_num
+                        params.pop("timestamp", None)
+                        params.pop("tail_offset", None)
 
                     if batch.records:
                         yield _ReadSessionBatch(batch)
@@ -121,23 +142,42 @@ async def run_read_session(
                             "Read session received an empty batch without a tail"
                         )
 
+                    if reconnect_after_delivery:
+                        if remaining_count == 0 or remaining_bytes == 0:
+                            return
+                        logger.debug("reconnecting read session on server advice")
+                        yield _ReadSessionRetrying()
+                        reconnect = True
+                        break
+
+            if reconnect:
+                continue
             return
         except Exception as e:
-            if attempt.value < max_retries and http_retry_on(e):
+            reconnect_required = requires_reconnect(e)
+            if reconnect_required and (remaining_count == 0 or remaining_bytes == 0):
+                return
+            if http_retry_on(e) and (reconnect_required or attempt.value < max_retries):
                 yield _ReadSessionRetrying()
-                backoff = compute_backoff(
-                    attempt.value,
-                    min_base_delay=min_base_delay,
-                    max_base_delay=max_base_delay,
-                )
-                logger.debug(
-                    "retrying read session: error=%s backoff=%.3fs retries_remaining=%d",
-                    e,
-                    backoff,
-                    max_retries - attempt.value - 1,
-                )
+                if reconnect_required:
+                    advised_reconnect_limiter.record_reconnect()
+                    backoff = 0.0
+                    logger.debug("reconnecting read session while server drains")
+                else:
+                    backoff = compute_backoff(
+                        attempt.value,
+                        min_base_delay=min_base_delay,
+                        max_base_delay=max_base_delay,
+                    )
+                    logger.debug(
+                        "retrying read session: error=%s backoff=%.3fs retries_remaining=%d",
+                        e,
+                        backoff,
+                        max_retries - attempt.value - 1,
+                    )
                 await asyncio.sleep(backoff)
-                attempt.value += 1
+                if not reconnect_required:
+                    attempt.value += 1
             else:
                 logger.debug(
                     "not retrying read session: error=%s is_retryable=%s retries_exhausted=%s",

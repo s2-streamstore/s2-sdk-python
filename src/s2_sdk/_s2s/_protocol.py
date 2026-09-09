@@ -2,9 +2,10 @@
 
 Message layout: [3 bytes: length] [1 byte: flag] [N bytes: body]
   The 3-byte length covers flag + body (i.e. everything after the length prefix).
-Flag byte: [T][CC][RRRRR]
+Flag byte: [T][CC][A][RRRR]
   T  = terminal (1 = last message)
   CC = compression (00=none, 01=zstd, 10=gzip)
+  A  = reconnect advised
   R  = reserved
 Terminal body: [2 bytes: status code big-endian] [JSON error]
 """
@@ -21,6 +22,7 @@ from s2_sdk._exceptions import (
     S2ServerError,
     raise_for_412,
     raise_for_416,
+    raise_for_503,
 )
 from s2_sdk._types import Compression
 
@@ -29,15 +31,17 @@ class Message(NamedTuple):
     body: bytes
     terminal: bool
     compression: Compression
+    reconnect_advised: bool = False
 
 
 # Compression threshold (1 KiB)
 COMPRESSION_THRESHOLD = 1024
 
-# Flag byte: [T][CC][RRRRR]
+# Flag byte: [T][CC][A][RRRR]
 _TERMINAL_BIT = 0b1000_0000
 _COMPRESSION_MASK = 0b0110_0000
 _COMPRESSION_SHIFT = 5
+_RECONNECT_ADVISED_BIT = 0b0001_0000
 
 # Length of the flag field in bytes
 _FLAG_LEN = 1
@@ -58,11 +62,13 @@ def frame_message(msg: Message) -> bytes:
     if msg.terminal:
         flag |= _TERMINAL_BIT
     flag |= (_COMPRESSION_CODE[msg.compression] & 0x3) << _COMPRESSION_SHIFT
+    if msg.reconnect_advised:
+        flag |= _RECONNECT_ADVISED_BIT
 
     return struct.pack(">I", msg_len)[1:] + bytes([flag]) + msg.body
 
 
-def deframe_data(data: bytes) -> Message:
+def deframe_message(data: bytes) -> Message:
     if len(data) < 4:
         raise ValueError("Message too short")
 
@@ -72,18 +78,19 @@ def deframe_data(data: bytes) -> Message:
     terminal = bool(flag & _TERMINAL_BIT)
     code = (flag & _COMPRESSION_MASK) >> _COMPRESSION_SHIFT
     compression = _COMPRESSION_FROM_CODE.get(code, Compression.NONE)
+    reconnect_advised = not terminal and bool(flag & _RECONNECT_ADVISED_BIT)
 
     body_len = msg_len - _FLAG_LEN
     body = data[4 : 4 + body_len]
     if len(body) < body_len:
         raise ValueError("Incomplete message body")
 
-    return Message(body, terminal, compression)
+    return Message(body, terminal, compression, reconnect_advised)
 
 
 async def read_messages(
     byte_stream: AsyncIterator[bytes],
-) -> AsyncIterator[bytes]:
+) -> AsyncIterator[Message]:
     buf = bytearray()
     while True:
         try:
@@ -100,21 +107,23 @@ async def read_messages(
             if len(buf) < frame_len:
                 break
 
-            flag = buf[3]
-            terminal = bool(flag & _TERMINAL_BIT)
-            compression_code = (flag & _COMPRESSION_MASK) >> _COMPRESSION_SHIFT
-            compression = _COMPRESSION_FROM_CODE.get(compression_code, Compression.NONE)
-            body = bytes(buf[4:frame_len])
+            message = deframe_message(bytes(buf[:frame_len]))
             buf = buf[frame_len:]
 
-            if terminal:
-                _handle_terminal(body)
+            if message.terminal:
+                _handle_terminal(message.body)
                 return
 
-            if compression != Compression.NONE:
-                body = decompress(body, compression)
+            body = message.body
+            if message.compression != Compression.NONE:
+                body = decompress(body, message.compression)
 
-            yield body
+            yield Message(
+                body,
+                terminal=False,
+                compression=Compression.NONE,
+                reconnect_advised=message.reconnect_advised,
+            )
 
 
 def maybe_compress(body: bytes, compression: Compression) -> tuple[bytes, Compression]:
@@ -143,6 +152,8 @@ def parse_error_info(body: bytes, status_code: int) -> S2ServerError:
     else:
         message = body.decode("utf-8", errors="replace")
 
+    if status_code == 503:
+        raise_for_503(message, code)
     return S2ServerError(code, message, status_code)
 
 
@@ -184,4 +195,6 @@ def _handle_terminal(body: bytes) -> None:
         message = error.get("message", str(error))
     else:
         message = str(error)
+    if status_code == 503:
+        raise_for_503(message, code)
     raise S2ServerError(code, message, status_code)

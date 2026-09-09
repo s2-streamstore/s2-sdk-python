@@ -2,7 +2,7 @@ import pytest
 
 from s2_sdk._s2s._protocol import (
     Message,
-    deframe_data,
+    deframe_message,
     frame_message,
     maybe_compress,
 )
@@ -15,7 +15,7 @@ class TestMessageFraming:
         data = frame_message(
             Message(body, terminal=False, compression=Compression.NONE)
         )
-        msg = deframe_data(data)
+        msg = deframe_message(data)
 
         assert msg.body == body
         assert msg.terminal is False
@@ -25,9 +25,9 @@ class TestMessageFraming:
         body = b"hello world" * 100
         compressed, comp = maybe_compress(body, Compression.ZSTD)
         data = frame_message(Message(compressed, terminal=False, compression=comp))
-        msg = deframe_data(data)
+        msg = deframe_message(data)
 
-        # deframe_data returns raw (still-compressed) body
+        # deframe_message returns the raw (still-compressed) body
         assert msg.compression == Compression.ZSTD
         assert msg.terminal is False
         from s2_sdk._compression import decompress
@@ -37,11 +37,24 @@ class TestMessageFraming:
     def test_terminal_message(self):
         body = b"\x00\x00some error"
         data = frame_message(Message(body, terminal=True, compression=Compression.NONE))
-        msg = deframe_data(data)
+        msg = deframe_message(data)
 
         assert msg.terminal is True
         # Terminal messages are not decompressed
         assert msg.body == body
+
+    def test_reconnect_advice(self):
+        data = frame_message(
+            Message(
+                b"hello",
+                terminal=False,
+                compression=Compression.NONE,
+                reconnect_advised=True,
+            )
+        )
+        msg = deframe_message(data)
+
+        assert msg.reconnect_advised is True
 
     def test_message_length_encoding(self):
         # Verify 3-byte length prefix covers flag + body
@@ -56,14 +69,14 @@ class TestMessageFraming:
 
     def test_empty_body(self):
         data = frame_message(Message(b"", terminal=False, compression=Compression.NONE))
-        msg = deframe_data(data)
+        msg = deframe_message(data)
 
         assert msg.body == b""
         assert msg.terminal is False
 
     def test_message_too_short(self):
         with pytest.raises(ValueError, match="Message too short"):
-            deframe_data(b"\x00\x00")
+            deframe_message(b"\x00\x00")
 
 
 class TestMaybeCompress:

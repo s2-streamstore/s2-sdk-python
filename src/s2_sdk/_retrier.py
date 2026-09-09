@@ -2,14 +2,24 @@ import asyncio
 import logging
 import math
 import random
+import time
 from dataclasses import dataclass
 from typing import Callable
 
-from s2_sdk._exceptions import ConnectError, S2ServerError, TransportError
+from s2_sdk._exceptions import (
+    ConnectError,
+    ConnectionRetiredError,
+    S2ServerError,
+    ServerDrainingError,
+    TransportError,
+)
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
 
 logger = logging.getLogger(__name__)
+
+_MAX_RECONNECTS_PER_WINDOW = 1
+_RECONNECT_WINDOW = 60.0
 
 
 class Retrier:
@@ -64,6 +74,32 @@ class Attempt:
     value: int
 
 
+@dataclass(slots=True)
+class AdvisedReconnectLimiter:
+    count: int = 0
+    last_reconnect_at: float | None = None
+
+    def try_acquire(self) -> bool:
+        if not self._is_recent():
+            self.count = 0
+        if self.count >= _MAX_RECONNECTS_PER_WINDOW:
+            return False
+        self.record_reconnect()
+        return True
+
+    def record_reconnect(self) -> None:
+        if not self._is_recent():
+            self.count = 0
+        self.last_reconnect_at = time.monotonic()
+        self.count += 1
+
+    def _is_recent(self) -> bool:
+        return (
+            self.last_reconnect_at is not None
+            and time.monotonic() - self.last_reconnect_at <= _RECONNECT_WINDOW
+        )
+
+
 def compute_backoff(
     attempt: int,
     min_base_delay: float = 0.1,
@@ -106,6 +142,10 @@ def is_safe_to_retry_session(
     return policy_compliant and http_retry_on(e)
 
 
+def requires_reconnect(e: Exception) -> bool:
+    return isinstance(e, (ConnectionRetiredError, ServerDrainingError))
+
+
 def http_retry_on(e: Exception) -> bool:
     if isinstance(e, S2ServerError):
         if e.status_code in (408, 429, 500, 502, 503, 504):
@@ -118,6 +158,8 @@ def http_retry_on(e: Exception) -> bool:
 
 
 def has_no_side_effects(e: Exception) -> bool:
+    if requires_reconnect(e):
+        return True
     if isinstance(e, S2ServerError):
         return (e.status_code == 429 and e.code == "rate_limited") or (
             e.status_code == 502 and e.code == "hot_server"
