@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from functools import wraps
 from inspect import isasyncgenfunction, iscoroutinefunction
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Never
 
 if TYPE_CHECKING:
     from s2_sdk._types import StreamPosition
@@ -65,6 +65,10 @@ class S2ServerError(S2Error):
         super().__init__(message)
 
 
+class ServerDrainingError(S2ServerError):
+    """The server is draining, so the associated connection should be retired."""
+
+
 class AppendConditionError(S2ServerError):
     """Append condition was not met."""
 
@@ -109,7 +113,7 @@ class ReadUnwrittenError(S2ServerError):
         super().__init__(code, message, status_code)
 
 
-def raise_for_412(body: dict, code: str) -> None:
+def raise_for_412(body: dict, code: str) -> Never:
     if "fencing_token_mismatch" in body:
         info = body["fencing_token_mismatch"]
         expected = (
@@ -133,7 +137,7 @@ def raise_for_412(body: dict, code: str) -> None:
     raise AppendConditionError(code, str(body), 412)
 
 
-def raise_for_416(body: dict, code: str) -> None:
+def raise_for_416(body: dict, code: str) -> Never:
     from s2_sdk._types import StreamPosition
 
     tail = body.get("tail", {})
@@ -146,6 +150,12 @@ def raise_for_416(body: dict, code: str) -> None:
             timestamp=tail.get("timestamp", 0),
         ),
     )
+
+
+def raise_for_503(message: str, code: str) -> Never:
+    if code == "server_draining":
+        raise ServerDrainingError(code, message, 503)
+    raise S2ServerError(code, message, 503)
 
 
 S2Error.__module__ = "s2_sdk"
@@ -173,8 +183,8 @@ class ConnectionClosedError(TransportError):
     """Connection closed unexpectedly."""
 
 
-class ReconnectAdvisedError(TransportError):
-    """A pooled connection is draining and must not accept a new stream."""
+class ConnectionRetiredError(TransportError):
+    """A retired connection cannot accept a new stream."""
 
 
 class ProtocolError(TransportError):
@@ -183,14 +193,6 @@ class ProtocolError(TransportError):
     def __init__(self, message: str, error_code: int | None = None):
         self.error_code = error_code
         super().__init__(message)
-
-
-def is_server_draining(e: BaseException) -> bool:
-    return (
-        isinstance(e, S2ServerError)
-        and e.status_code == 503
-        and e.code == "server_draining"
-    )
 
 
 def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:

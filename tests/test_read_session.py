@@ -1,9 +1,16 @@
 import asyncio
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, cast
+from unittest.mock import patch
 
 import pytest
 
+import s2_sdk._generated.s2.v1.s2_pb2 as pb
+import s2_sdk._s2s._read_session as s2s_read_session
 from s2_sdk import S2ClientError
+from s2_sdk._client import HttpClient
 from s2_sdk._read_session import (
     ReadSession,
     _ReadSessionBatch,
@@ -11,7 +18,61 @@ from s2_sdk._read_session import (
     _ReadSessionHeartbeat,
     _ReadSessionRetrying,
 )
-from s2_sdk._types import ReadBatch, SequencedRecord, StreamPosition
+from s2_sdk._s2s._protocol import Message
+from s2_sdk._types import (
+    Compression,
+    ReadBatch,
+    ReadLimit,
+    Retry,
+    SeqNum,
+    SequencedRecord,
+    StreamPosition,
+)
+
+
+@dataclass(slots=True)
+class _Response:
+    messages: tuple[Message, ...]
+    status_code: int = 200
+    retired: bool = False
+
+    async def aiter_bytes(self) -> AsyncIterator[bytes]:
+        for message in self.messages:
+            yield cast(bytes, message)
+
+    def retire_connection(self) -> None:
+        self.retired = True
+
+
+class _Client:
+    def __init__(self, attempts: list[tuple[Message, ...]]) -> None:
+        self.attempts = attempts
+        self.requests: list[dict[str, Any]] = []
+        self.responses: list[_Response] = []
+
+    @asynccontextmanager
+    async def streaming_request(
+        self,
+        *args: Any,
+        params: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> AsyncGenerator[_Response, None]:
+        self.requests.append(dict(params or {}))
+        response = _Response(self.attempts.pop(0))
+        self.responses.append(response)
+        yield response
+
+
+def _batch_message(seq_num: int, *, reconnect_advised: bool = False) -> Message:
+    batch = pb.ReadBatch(
+        records=[pb.SequencedRecord(seq_num=seq_num, timestamp=1, body=b"x")]
+    )
+    return Message(
+        batch.SerializeToString(),
+        terminal=False,
+        compression=Compression.NONE,
+        reconnect_advised=reconnect_advised,
+    )
 
 
 def _record(seq_num: int, *, command: bool = False) -> SequencedRecord:
@@ -202,3 +263,60 @@ async def test_read_error_fails_caught_up_and_iteration():
         await anext(session)
 
     assert read_error.value is caught_up_error.value
+
+
+def _decoded_messages(stream: AsyncIterator[bytes]) -> AsyncIterator[Message]:
+    return cast(AsyncIterator[Message], stream)
+
+
+async def _run_s2s_read(client: _Client, count: int) -> list[_ReadSessionEvent]:
+    return [
+        event
+        async for event in s2s_read_session.run_read_session(
+            cast(HttpClient, client),
+            "stream",
+            SeqNum(10),
+            ReadLimit(count=count),
+            until_timestamp=None,
+            clamp_to_tail=False,
+            wait=None,
+            retry=Retry(max_attempts=1),
+        )
+    ]
+
+
+async def test_advised_reconnect_resumes_from_next_seq_num() -> None:
+    client = _Client(
+        [
+            (_batch_message(10, reconnect_advised=True),),
+            (_batch_message(11),),
+        ]
+    )
+
+    with patch.object(s2s_read_session, "read_messages", new=_decoded_messages):
+        events = await _run_s2s_read(client, count=2)
+
+    assert isinstance(events[0], _ReadSessionBatch)
+    assert isinstance(events[1], _ReadSessionRetrying)
+    assert isinstance(events[2], _ReadSessionBatch)
+    assert events[0].batch.records[0].seq_num == 10
+    assert events[2].batch.records[0].seq_num == 11
+    assert client.requests[1] == {"seq_num": 11, "count": 1}
+    assert client.responses[0].retired
+
+
+async def test_repeated_reconnect_advice_does_not_reconnect_again() -> None:
+    client = _Client(
+        [
+            (_batch_message(10, reconnect_advised=True),),
+            (_batch_message(11, reconnect_advised=True), _batch_message(12)),
+        ]
+    )
+
+    with patch.object(s2s_read_session, "read_messages", new=_decoded_messages):
+        events = await _run_s2s_read(client, count=3)
+
+    batches = [event for event in events if isinstance(event, _ReadSessionBatch)]
+    assert [batch.batch.records[0].seq_num for batch in batches] == [10, 11, 12]
+    assert len(client.requests) == 2
+    assert client.responses[1].retired

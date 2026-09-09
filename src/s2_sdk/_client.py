@@ -5,11 +5,11 @@ import json as json_lib
 import logging
 import ssl
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Callable, Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from importlib.metadata import version
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Never
 from urllib.parse import urlencode, urlsplit
 
 import h2.config
@@ -22,15 +22,16 @@ from s2_sdk._exceptions import (
     UNKNOWN_CODE,
     ConnectError,
     ConnectionClosedError,
+    ConnectionRetiredError,
     ProtocolError,
     ReadTimeoutError,
-    ReconnectAdvisedError,
     S2ClientError,
     S2ServerError,
+    ServerDrainingError,
     TransportError,
-    is_server_draining,
     raise_for_412,
     raise_for_416,
+    raise_for_503,
     set_and_retrieve_future_exception,
 )
 from s2_sdk._types import Compression
@@ -171,11 +172,11 @@ class HttpClient:
                 )
 
             response = Response(status_code, resp_body, resp_headers)
-            retry_after_ms = _header_value(resp_headers, "retry-after-ms")
-            _raise_for_status(response, retry_after_ms=retry_after_ms)
-        except S2ServerError as e:
-            if is_server_draining(e):
-                pc.poison()
+            if not 200 <= status_code < 300:
+                retry_after_ms = _header_value(resp_headers, "retry-after-ms")
+                _raise_response_error(response, retry_after_ms=retry_after_ms)
+        except ServerDrainingError:
+            pc.retire()
             raise
         except TransportError:
             raise
@@ -191,7 +192,7 @@ class HttpClient:
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
             pc.touch_idle()
-            if pc.is_poisoned and pc.is_idle:
+            if pc.is_retired and pc.is_idle:
                 await pc.close()
         return response
 
@@ -205,7 +206,7 @@ class HttpClient:
         headers: dict[str, str] | None = None,
         content: Any = None,
         frame_signal: Any = None,
-    ) -> AsyncIterator[StreamingResponse]:
+    ) -> AsyncGenerator[StreamingResponse, None]:
         pc, state = await self._pool.checkout(self._base_url)
         conn = pc._conn
         stream_id: int | None = None
@@ -257,12 +258,11 @@ class HttpClient:
                 ended=state.ended,
                 stream_state=state,
                 ack=_ack_stream_data,
-                poison=pc.poison,
+                retire_connection=pc.retire,
             )
             yield response
-        except S2ServerError as e:
-            if is_server_draining(e):
-                pc.poison()
+        except ServerDrainingError:
+            pc.retire()
             raise
         except TransportError:
             raise
@@ -285,7 +285,7 @@ class HttpClient:
                     await conn.reset_stream(stream_id)
             conn.release_stream(stream_id, state)
             pc.touch_idle()
-            if pc.is_poisoned and pc.is_idle:
+            if pc.is_retired and pc.is_idle:
                 await pc.close()
 
     def _build_headers(
@@ -417,10 +417,12 @@ class ConnectionPool:
             for base_url, conns in tuple(self._hosts.items()):
                 to_close: list[_PooledConnection] = []
                 for pc in conns:
-                    if pc.is_poisoned:
+                    if pc.is_retired:
                         if pc.is_idle:
                             to_close.append(pc)
-                    elif not pc._conn.is_available:
+                        continue
+
+                    if not pc._conn.is_available:
                         to_close.append(pc)
                     elif (
                         pc.is_idle
@@ -492,7 +494,7 @@ class StreamingResponse:
         "_stream_state",
         "_buf",
         "_ack",
-        "_poison",
+        "_retire_connection",
     )
 
     def __init__(
@@ -502,7 +504,7 @@ class StreamingResponse:
         ended: asyncio.Event,
         stream_state: Any,
         ack: Callable[[int], Any] | None = None,
-        poison: Callable[[], None] | None = None,
+        retire_connection: Callable[[], None] | None = None,
     ) -> None:
         self.status_code = status_code
         self._data_queue = data_queue
@@ -510,11 +512,11 @@ class StreamingResponse:
         self._stream_state = stream_state
         self._buf = bytearray()
         self._ack = ack
-        self._poison = poison
+        self._retire_connection = retire_connection
 
-    def poison_connection(self) -> None:
-        if self._poison is not None:
-            self._poison()
+    def retire_connection(self) -> None:
+        if self._retire_connection is not None:
+            self._retire_connection()
 
     async def aread(self) -> bytes:
         chunks: list[bytes] = []
@@ -567,17 +569,17 @@ class StreamingResponse:
 
 
 class _PooledConnection:
-    __slots__ = ("_conn", "_idle_since", "_poisoned")
+    __slots__ = ("_conn", "_idle_since", "_retired")
 
     def __init__(self, conn: Connection) -> None:
         self._conn = conn
         self._idle_since: float | None = None
-        self._poisoned = False
+        self._retired = False
 
     @property
     def has_capacity(self) -> bool:
         return (
-            not self._poisoned
+            not self._retired
             and self._conn.is_available
             and self._conn._settings_received.is_set()
             and self._conn.open_stream_count < self._conn.max_concurrent_streams
@@ -588,12 +590,14 @@ class _PooledConnection:
         return self._conn.open_stream_count == 0
 
     @property
-    def is_poisoned(self) -> bool:
-        return self._poisoned
+    def is_retired(self) -> bool:
+        return self._retired
 
-    def poison(self) -> None:
-        self._poisoned = True
-        self._conn.poison()
+    def retire(self) -> None:
+        if self._retired:
+            return
+        self._retired = True
+        self._conn.retire()
 
     def touch_idle(self) -> None:
         if self._conn.open_stream_count == 0:
@@ -637,7 +641,7 @@ class Connection:
         "_pending_streams",
         "_recv_task",
         "_closed",
-        "_poisoned",
+        "_retired",
         "_goaway_received",
         "_recv_dead",
         "_send_dead",
@@ -664,7 +668,7 @@ class Connection:
         self._pending_streams: dict[int, _StreamState] = {}
         self._recv_task: asyncio.Task[None] | None = None
         self._closed = False
-        self._poisoned = False
+        self._retired = False
         self._goaway_received = False
         self._recv_dead = False
         self._send_dead = False
@@ -716,11 +720,11 @@ class Connection:
         self._pending_streams[id(state)] = state
         return state
 
-    def poison(self) -> None:
-        if self._poisoned:
+    def retire(self) -> None:
+        if self._retired:
             return
-        self._poisoned = True
-        error = ReconnectAdvisedError("Connection is draining")
+        self._retired = True
+        error = ConnectionRetiredError("Connection is retired")
         for state in self._pending_streams.values():
             self._fail_stream(state, error)
 
@@ -847,15 +851,15 @@ class Connection:
     def is_available(self) -> bool:
         return (
             not self._closed
-            and not self._poisoned
+            and not self._retired
             and not self._goaway_received
             and not self._recv_dead
             and not self._send_dead
         )
 
     @property
-    def is_poisoned(self) -> bool:
-        return self._poisoned
+    def is_retired(self) -> bool:
+        return self._retired
 
     @property
     def max_concurrent_streams(self) -> int:
@@ -1055,36 +1059,38 @@ def _parse_retry_after_ms(raw: str | None) -> float | None:
         return None
 
 
-def _raise_for_status(response: Response, *, retry_after_ms: str | None = None) -> None:
+def _raise_response_error(
+    response: Response,
+    *,
+    retry_after_ms: str | None = None,
+) -> Never:
     status = response.status_code
-    if 200 <= status < 300:
-        return
-
     retry_after = _parse_retry_after_ms(retry_after_ms)
+
     body: Any | None
     try:
         body = response.json()
     except Exception:
         body = None
 
-    if status == 412 and isinstance(body, dict):
-        code = body.get("code", UNKNOWN_CODE)
-        raise_for_412(body, code)
-
-    if status == 416 and isinstance(body, dict):
-        code = body.get("code", UNKNOWN_CODE)
-        raise_for_416(body, code)
-
     if isinstance(body, dict):
-        message = body.get("message", response.text)
         code = body.get("code", UNKNOWN_CODE)
+        message = body.get("message", response.text)
     else:
-        message = response.text
         code = UNKNOWN_CODE
+        message = response.text
 
-    e = S2ServerError(code, message, status)
-    e._retry_after = retry_after
-    raise e
+    try:
+        if status == 412 and isinstance(body, dict):
+            raise_for_412(body, code)
+        if status == 416 and isinstance(body, dict):
+            raise_for_416(body, code)
+        if status == 503:
+            raise_for_503(message, code)
+        raise S2ServerError(code, message, status)
+    except S2ServerError as error:
+        error._retry_after = retry_after
+        raise
 
 
 class _Checkout(NamedTuple):

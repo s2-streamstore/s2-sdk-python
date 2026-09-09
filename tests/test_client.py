@@ -9,7 +9,7 @@ from s2_sdk._client import (
     HttpClient,
     Response,
     _PooledConnection,
-    _raise_for_status,
+    _raise_response_error,
     _StreamState,
 )
 from s2_sdk._exceptions import (
@@ -214,7 +214,7 @@ async def test_unary_request_timeout_acks_and_resets_stream():
 
     pc = MagicMock()
     pc._conn = conn
-    pc.is_poisoned = False
+    pc.is_retired = False
     pc.touch_idle = MagicMock()
 
     pool = MagicMock()
@@ -630,13 +630,13 @@ async def test_fail_stream_is_idempotent_for_queue_sentinel():
 
 
 @pytest.mark.parametrize("status_code", [412, 416])
-def test_raise_for_status_falls_back_to_text_for_non_json_special_status(
+def test_raise_response_error_falls_back_to_text_for_non_json_special_status(
     status_code: int,
 ):
     response = Response(status_code, b"not-json")
 
     with pytest.raises(S2ServerError) as exc_info:
-        _raise_for_status(response)
+        _raise_response_error(response)
 
     assert exc_info.value.status_code == status_code
     assert exc_info.value.code == "unknown"

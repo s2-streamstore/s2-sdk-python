@@ -16,11 +16,11 @@ from s2_sdk._read_session import (
     _ReadSessionRetrying,
 )
 from s2_sdk._retrier import (
-    AdvisedReconnects,
+    AdvisedReconnectLimiter,
     Attempt,
     compute_backoff,
     http_retry_on,
-    is_planned_reconnect,
+    requires_reconnect,
 )
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
@@ -55,7 +55,7 @@ async def run_read_session(
     min_base_delay = retry.min_base_delay.total_seconds()
     max_base_delay = retry.max_base_delay.total_seconds()
     attempt = Attempt(0)
-    advised_reconnects = AdvisedReconnects()
+    advised_reconnect_limiter = AdvisedReconnectLimiter()
 
     remaining_count = limit.count if limit and limit.count is not None else None
     remaining_bytes = limit.bytes if limit and limit.bytes is not None else None
@@ -83,7 +83,7 @@ async def run_read_session(
                     raise parse_error_info(body, response.status_code)
 
                 messages = read_messages(response.aiter_bytes())
-                advice_seen = False
+                reconnect_advice_seen = False
                 while True:
                     try:
                         message = await asyncio.wait_for(
@@ -98,10 +98,12 @@ async def run_read_session(
                         attempt.value = 0
 
                     reconnect_after_delivery = False
-                    if message.reconnect_advised and not advice_seen:
-                        advice_seen = True
-                        response.poison_connection()
-                        reconnect_after_delivery = advised_reconnects.should_reconnect()
+                    if message.reconnect_advised and not reconnect_advice_seen:
+                        reconnect_advice_seen = True
+                        response.retire_connection()
+                        reconnect_after_delivery = (
+                            advised_reconnect_limiter.try_acquire()
+                        )
 
                     proto_batch = pb.ReadBatch()
                     proto_batch.ParseFromString(message.body)
@@ -143,7 +145,6 @@ async def run_read_session(
                     if reconnect_after_delivery:
                         if remaining_count == 0 or remaining_bytes == 0:
                             return
-                        advised_reconnects.record()
                         logger.debug("reconnecting read session on server advice")
                         yield _ReadSessionRetrying()
                         reconnect = True
@@ -153,13 +154,13 @@ async def run_read_session(
                 continue
             return
         except Exception as e:
-            planned = is_planned_reconnect(e)
-            if planned and (remaining_count == 0 or remaining_bytes == 0):
+            reconnect_required = requires_reconnect(e)
+            if reconnect_required and (remaining_count == 0 or remaining_bytes == 0):
                 return
-            if http_retry_on(e) and (planned or attempt.value < max_retries):
+            if http_retry_on(e) and (reconnect_required or attempt.value < max_retries):
                 yield _ReadSessionRetrying()
-                if planned:
-                    advised_reconnects.record()
+                if reconnect_required:
+                    advised_reconnect_limiter.record_reconnect()
                     backoff = 0.0
                     logger.debug("reconnecting read session while server drains")
                 else:
@@ -175,7 +176,7 @@ async def run_read_session(
                         max_retries - attempt.value - 1,
                     )
                 await asyncio.sleep(backoff)
-                if not planned:
+                if not reconnect_required:
                     attempt.value += 1
             else:
                 logger.debug(

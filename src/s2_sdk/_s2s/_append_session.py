@@ -3,8 +3,9 @@ import logging
 from collections import deque
 from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 from contextlib import suppress
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any, NamedTuple
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
@@ -12,16 +13,15 @@ from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._mappers import append_ack_from_proto, append_input_to_proto
 from s2_sdk._retrier import (
-    AdvisedReconnects,
+    AdvisedReconnectLimiter,
     Attempt,
     compute_backoff,
-    is_planned_reconnect,
     is_safe_to_retry_session,
+    requires_reconnect,
 )
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import (
     Message,
-    ReceivedMessage,
     frame_message,
     maybe_compress,
     parse_error_info,
@@ -46,6 +46,22 @@ class _InflightInput:
     num_records: int
     encoded: bytes
     ack_deadline: float | None = None
+
+
+@dataclass(slots=True)
+class _AppendSessionState:
+    inflight_inputs: deque[_InflightInput] = field(default_factory=deque)
+    inputs_exhausted: bool = False
+
+
+class _AttemptOutcome(Enum):
+    COMPLETE = auto()
+    RECONNECT = auto()
+
+
+class _ReadAck(NamedTuple):
+    ack: pb.AppendAck
+    reconnect_advised: bool
 
 
 async def run_append_session(
@@ -74,51 +90,55 @@ async def run_append_session(
             await input_queue.put(None)
 
     async def retrying_inner():
-        inflight_inputs: deque[_InflightInput] = deque()
+        session_state = _AppendSessionState()
         max_retries = retry._max_retries()
         min_base_delay = retry.min_base_delay.total_seconds()
         max_base_delay = retry.max_base_delay.total_seconds()
         attempt = Attempt(0)
-        advised_reconnects = AdvisedReconnects()
-        input_closed = asyncio.Event()
+        advised_reconnect_limiter = AdvisedReconnectLimiter()
         try:
             while True:
                 try:
-                    resend_inputs = tuple(inflight_inputs)
+                    resend_inputs = tuple(session_state.inflight_inputs)
                     if frame_signal is not None:
                         frame_signal.reset()
-                    reconnect = await _run_attempt(
+                    outcome = await _run_attempt(
                         client,
                         stream_name,
                         attempt,
-                        inflight_inputs,
+                        session_state,
                         input_queue,
                         ack_queue,
                         resend_inputs,
                         compression,
                         frame_signal,
                         ack_timeout,
-                        advised_reconnects,
-                        input_closed,
+                        advised_reconnect_limiter,
                         encryption_key,
                     )
-                    if reconnect and not input_closed.is_set():
-                        advised_reconnects.record()
+                    if (
+                        outcome is _AttemptOutcome.RECONNECT
+                        and not session_state.inputs_exhausted
+                    ):
                         logger.debug("reconnecting append session on server advice")
                         continue
                     return
                 except Exception as e:
-                    planned = is_planned_reconnect(e)
-                    if planned and input_closed.is_set() and not inflight_inputs:
+                    reconnect_required = requires_reconnect(e)
+                    if (
+                        reconnect_required
+                        and session_state.inputs_exhausted
+                        and not session_state.inflight_inputs
+                    ):
                         return
-                    if planned:
-                        advised_reconnects.record()
+                    if reconnect_required:
+                        advised_reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting append session while server drains")
                         continue
                     if attempt.value < max_retries and is_safe_to_retry_session(
                         e,
                         retry.append_retry_policy,
-                        bool(inflight_inputs),
+                        bool(session_state.inflight_inputs),
                         frame_signal,
                     ):
                         backoff = compute_backoff(
@@ -158,17 +178,17 @@ async def _run_attempt(
     client: HttpClient,
     stream_name: str,
     attempt: Attempt,
-    inflight_inputs: deque[_InflightInput],
+    session_state: _AppendSessionState,
     input_queue: asyncio.Queue[AppendInput | None],
     ack_queue: asyncio.Queue[AppendAck | None],
     resend_inputs: tuple[_InflightInput, ...],
     compression: Compression,
     frame_signal: FrameSignal | None,
     ack_timeout: float,
-    advised_reconnects: AdvisedReconnects,
-    input_closed: asyncio.Event,
+    advised_reconnect_limiter: AdvisedReconnectLimiter,
     encryption_key: str | None = None,
-) -> bool:
+) -> _AttemptOutcome:
+    inflight_inputs = session_state.inflight_inputs
     headers = {
         "content-type": "s2s/proto",
         "accept": "s2s/proto",
@@ -186,14 +206,13 @@ async def _run_attempt(
         _stream_records_path(stream_name),
         headers=headers,
         content=_body_gen(
-            inflight_inputs,
+            session_state,
             input_queue,
             resend_inputs,
             compression,
             ack_deadline_armed,
             ack_timeout,
             reconnect,
-            input_closed,
         ),
         frame_signal=frame_signal,
     ) as response:
@@ -203,29 +222,28 @@ async def _run_attempt(
 
         prev_ack_end: int | None = None
         resend_remaining = len(resend_inputs)
-        advice_seen = False
+        reconnect_advice_seen = False
 
         messages = read_messages(response.aiter_bytes())
         while True:
             try:
-                read_ack = _read_ack(messages, inflight_inputs, ack_deadline_armed)
+                pending_ack = _read_ack(messages, inflight_inputs, ack_deadline_armed)
                 if reconnect.is_set() and not inflight_inputs:
-                    message = await asyncio.wait_for(read_ack, timeout=ack_timeout)
+                    read_ack = await asyncio.wait_for(pending_ack, timeout=ack_timeout)
                 else:
-                    message = await read_ack
+                    read_ack = await pending_ack
             except StopAsyncIteration:
                 break
             except asyncio.TimeoutError:
                 raise ReadTimeoutError("Append session ack timeout") from None
 
-            if message.reconnect_advised and not advice_seen:
-                advice_seen = True
-                response.poison_connection()
-                if advised_reconnects.should_reconnect():
+            ack, reconnect_advised = read_ack
+            if reconnect_advised and not reconnect_advice_seen:
+                reconnect_advice_seen = True
+                response.retire_connection()
+                if advised_reconnect_limiter.try_acquire():
                     reconnect.set()
 
-            ack = pb.AppendAck()
-            ack.ParseFromString(message.body)
             if attempt.value > 0:
                 attempt.value = 0
             if ack.end.seq_num < ack.start.seq_num:
@@ -258,14 +276,21 @@ async def _run_attempt(
                 f"Append session response stream closed with {len(inflight_inputs)} "
                 "unacknowledged batches"
             )
-        return reconnect.is_set()
+        if reconnect.is_set():
+            return _AttemptOutcome.RECONNECT
+        return _AttemptOutcome.COMPLETE
 
 
 async def _read_ack(
-    messages: AsyncIterator[ReceivedMessage],
+    messages: AsyncIterator[Message],
     inflight_inputs: deque[_InflightInput],
     deadline_armed: asyncio.Event,
-) -> ReceivedMessage:
+) -> _ReadAck:
+    def parse_ack(message: Message) -> _ReadAck:
+        ack = pb.AppendAck()
+        ack.ParseFromString(message.body)
+        return _ReadAck(ack, message.reconnect_advised)
+
     next_msg_task: asyncio.Task[Any] | None = None
     deadline_armed_waiter_task: asyncio.Task[Any] | None = None
     try:
@@ -278,7 +303,7 @@ async def _read_ack(
                             message = await next_msg_task
                         else:
                             message = await messages.__anext__()
-                        return message
+                        return parse_ack(message)
                 except TimeoutError:
                     raise ReadTimeoutError("Append session ack timeout") from None
 
@@ -295,7 +320,7 @@ async def _read_ack(
                 with suppress(asyncio.CancelledError):
                     await deadline_armed_waiter_task
             if next_msg_task in done:
-                return next_msg_task.result()
+                return parse_ack(next_msg_task.result())
     finally:
         tasks = tuple(
             task
@@ -308,15 +333,15 @@ async def _read_ack(
 
 
 async def _body_gen(
-    inflight_inputs: deque[_InflightInput],
+    session_state: _AppendSessionState,
     input_queue: asyncio.Queue[AppendInput | None],
     resend_inputs: tuple[_InflightInput, ...],
     compression: Compression,
     ack_deadline_armed: asyncio.Event,
     ack_timeout: float,
     reconnect: asyncio.Event,
-    input_closed: asyncio.Event,
 ) -> AsyncGenerator[bytes]:
+    inflight_inputs = session_state.inflight_inputs
     loop = asyncio.get_running_loop()
     if resend_inputs:
         logger.debug(
@@ -352,7 +377,7 @@ async def _body_gen(
                 await asyncio.gather(input_task, reconnect_task, return_exceptions=True)
         if inp is None:
             await input_queue.put(None)
-            input_closed.set()
+            session_state.inputs_exhausted = True
             return
         encoded = _encode_input(inp, compression)
         ack_deadline = loop.time() + ack_timeout

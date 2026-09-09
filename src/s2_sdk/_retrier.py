@@ -8,18 +8,18 @@ from typing import Callable
 
 from s2_sdk._exceptions import (
     ConnectError,
-    ReconnectAdvisedError,
+    ConnectionRetiredError,
     S2ServerError,
+    ServerDrainingError,
     TransportError,
-    is_server_draining,
 )
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
 
 logger = logging.getLogger(__name__)
 
-_MAX_ADVISED_RECONNECTS = 1
-_ADVISED_RECONNECT_IDLE = 60.0
+_MAX_RECONNECTS_PER_WINDOW = 1
+_RECONNECT_WINDOW = 60.0
 
 
 class Retrier:
@@ -75,23 +75,28 @@ class Attempt:
 
 
 @dataclass(slots=True)
-class AdvisedReconnects:
+class AdvisedReconnectLimiter:
     count: int = 0
-    last: float | None = None
+    last_reconnect_at: float | None = None
 
-    def record(self) -> None:
+    def try_acquire(self) -> bool:
         if not self._is_recent():
             self.count = 0
-        self.last = time.monotonic()
-        self.count += 1
+        if self.count >= _MAX_RECONNECTS_PER_WINDOW:
+            return False
+        self.record_reconnect()
+        return True
 
-    def should_reconnect(self) -> bool:
-        return not self._is_recent() or self.count < _MAX_ADVISED_RECONNECTS
+    def record_reconnect(self) -> None:
+        if not self._is_recent():
+            self.count = 0
+        self.last_reconnect_at = time.monotonic()
+        self.count += 1
 
     def _is_recent(self) -> bool:
         return (
-            self.last is not None
-            and time.monotonic() - self.last <= _ADVISED_RECONNECT_IDLE
+            self.last_reconnect_at is not None
+            and time.monotonic() - self.last_reconnect_at <= _RECONNECT_WINDOW
         )
 
 
@@ -137,8 +142,8 @@ def is_safe_to_retry_session(
     return policy_compliant and http_retry_on(e)
 
 
-def is_planned_reconnect(e: Exception) -> bool:
-    return isinstance(e, ReconnectAdvisedError) or is_server_draining(e)
+def requires_reconnect(e: Exception) -> bool:
+    return isinstance(e, (ConnectionRetiredError, ServerDrainingError))
 
 
 def http_retry_on(e: Exception) -> bool:
@@ -153,14 +158,12 @@ def http_retry_on(e: Exception) -> bool:
 
 
 def has_no_side_effects(e: Exception) -> bool:
-    if isinstance(e, S2ServerError):
-        return (
-            (e.status_code == 429 and e.code == "rate_limited")
-            or (e.status_code == 502 and e.code == "hot_server")
-            or is_server_draining(e)
-        )
-    if isinstance(e, ReconnectAdvisedError):
+    if requires_reconnect(e):
         return True
+    if isinstance(e, S2ServerError):
+        return (e.status_code == 429 and e.code == "rate_limited") or (
+            e.status_code == 502 and e.code == "hot_server"
+        )
     if isinstance(e, ConnectError):
         cause = e.__cause__
         while cause is not None:
