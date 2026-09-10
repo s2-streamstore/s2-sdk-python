@@ -339,9 +339,9 @@ class ConnectionPool:
 
         self._ensure_reaper()
 
-        result = self._try_checkout(base_url)
-        if result is not None:
-            return result
+        checkout = self._try_checkout(base_url)
+        if checkout is not None:
+            return checkout
 
         lock = self._host_locks.get(base_url)
         if lock is None:
@@ -351,9 +351,9 @@ class ConnectionPool:
         async with lock:
             # Re-check after acquiring lock — another caller may have
             # created a connection while we waited.
-            result = self._try_checkout(base_url)
-            if result is not None:
-                return result
+            checkout = self._try_checkout(base_url)
+            if checkout is not None:
+                return checkout
 
             scheme, host, port = _origin(base_url)
             use_ssl = self._ssl_context if scheme == "https" else None
@@ -375,25 +375,31 @@ class ConnectionPool:
                 )
             except asyncio.TimeoutError:
                 pass  # Proceed with h2 defaults
+
             if conn._recv_dead:
                 await conn.close()
                 raise ConnectError(
                     f"Connection to {host}:{port} closed before HTTP/2 SETTINGS"
                 )
 
-            pc = _PooledConnection(conn)
-            conns = self._hosts.get(base_url)
-            if conns is None:
-                conns = [pc]
-                self._hosts[base_url] = conns
-            else:
-                conns.append(pc)
             if conn._settings_received.is_set() and conn.max_concurrent_streams <= 0:
-                await pc.close()
-                conns.remove(pc)
+                await conn.close()
                 raise ProtocolError("Connection has no available stream capacity")
+
+            pc = await self._add_connection(base_url, conn)
             state = pc._conn.reserve_stream()
             return _Checkout(pc, state)
+
+    async def _add_connection(
+        self, base_url: str, conn: Connection
+    ) -> _PooledConnection:
+        if self._closed:
+            await conn.close()
+            raise S2ClientError("Pool is closed")
+
+        pc = _PooledConnection(conn)
+        self._hosts.setdefault(base_url, []).append(pc)
+        return pc
 
     def _try_checkout(self, base_url: str) -> _Checkout | None:
         conns = self._hosts.get(base_url)
