@@ -19,6 +19,9 @@ class BatchAccumulator:
         self._records.append(record)
         self._bytes += metered_bytes((record,))
 
+    def would_exceed_max_bytes(self, record: Record) -> bool:
+        return self._bytes + metered_bytes((record,)) > self._batching.max_bytes
+
     def take(self) -> list[Record]:
         records = list(self._records)
         self._records.clear()
@@ -60,22 +63,17 @@ async def append_record_batches(
     next_record_task = None
 
     try:
-        while True:
-            if next_record_task is not None:
-                record = await next_record_task
-                next_record_task = None
-            else:
-                record = await anext(record_iter, None)
-            if record is None:
-                break
-
+        record = await anext(record_iter, None)
+        while record is not None:
             acc.add(record)
+            record = None
 
             deadline = (
                 asyncio.get_running_loop().time() + linger_secs
                 if linger_secs > 0
                 else None
             )
+
             while not acc.is_full():
                 if deadline is not None:
                     remaining = deadline - asyncio.get_running_loop().time()
@@ -89,11 +87,19 @@ async def append_record_batches(
                     next_record_task = None
                 else:
                     record = await anext(record_iter, None)
-                if record is None:
+                if record is None or acc.would_exceed_max_bytes(record):
                     break
                 acc.add(record)
+                record = None
 
             yield acc.take()
+
+            if record is None:
+                if next_record_task is not None:
+                    record = await next_record_task
+                    next_record_task = None
+                else:
+                    record = await anext(record_iter, None)
     finally:
         if next_record_task is not None:
             if not next_record_task.done():

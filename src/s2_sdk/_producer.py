@@ -110,6 +110,12 @@ class Producer:
         if self._error is not None:
             raise self._error
 
+        if (
+            not self._accumulator.is_empty()
+            and self._accumulator.would_exceed_max_bytes(record)
+        ):
+            await self._submit_batch_now()
+
         loop = asyncio.get_running_loop()
         ack_fut: asyncio.Future[IndexedAppendAck] = loop.create_future()
         self._indexed_ack_futs.append(ack_fut)

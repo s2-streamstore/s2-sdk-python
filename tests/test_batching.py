@@ -37,8 +37,8 @@ async def test_count_limit():
 
 
 @pytest.mark.asyncio
-async def test_bytes_limit():
-    # Each record: 8 bytes overhead + body. Body of 10 bytes → 18 metered bytes.
+async def test_batch_flushes_at_max_bytes():
+    # Each record is 10(body) + 8(overhead) = 18 metered bytes.
     records = [Record(body=b"x" * 10) for _ in range(3)]
     batches = []
     async for batch in append_record_batches(
@@ -46,10 +46,25 @@ async def test_bytes_limit():
         batching=Batching(max_bytes=36, linger=timedelta(0)),
     ):
         batches.append(batch)
-    # 36 bytes limit: first 2 records fit (36 bytes), third goes in next batch
     assert len(batches) == 2
     assert len(batches[0]) == 2
     assert len(batches[1]) == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_flushes_before_exceeding_max_bytes():
+    # Each record is 10(body) + 8(overhead) = 18 metered bytes.
+    records = [Record(body=b"x" * 10) for _ in range(3)]
+    batches = []
+    async for batch in append_record_batches(
+        _async_iter(records),
+        batching=Batching(max_bytes=30, linger=timedelta(0)),
+    ):
+        batches.append(batch)
+    assert len(batches) == 3
+    assert len(batches[0]) == 1
+    assert len(batches[1]) == 1
+    assert len(batches[2]) == 1
 
 
 @pytest.mark.asyncio
