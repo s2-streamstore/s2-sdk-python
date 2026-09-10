@@ -46,6 +46,7 @@ from s2_sdk._types import (
     metered_bytes,
 )
 from s2_sdk._validators import (
+    validate_access_token_id,
     validate_append_input,
     validate_basin,
     validate_batching,
@@ -53,6 +54,7 @@ from s2_sdk._validators import (
     validate_location,
     validate_max_unacked,
     validate_retry,
+    validate_stream,
 )
 
 
@@ -466,6 +468,7 @@ class S2:
         Returns:
             The access token string.
         """
+        validate_access_token_id(id)
         json = access_token_info_to_json(id, scope, auto_prefix_streams, expires_at)
         response = await self._retrier(
             self._account_client.unary_request,
@@ -715,6 +718,7 @@ class S2Basin:
             up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
             as a delimiter for hierarchical naming.
         """
+        validate_stream(name)
         json: dict[str, Any] = {"stream": name}
         if config is not None:
             json["config"] = stream_config_to_json(config)
@@ -756,6 +760,7 @@ class S2Basin:
             up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
             as a delimiter for hierarchical naming.
         """
+        validate_stream(name)
         json = stream_config_to_json(config)
         response = await self._retrier(
             self._client.unary_request, "PUT", _stream_path(name), json=json
@@ -788,6 +793,7 @@ class S2Basin:
         Tip:
             Also available via subscript: ``s2["my-basin"]["my-stream"]``.
         """
+        validate_stream(name)
         if isinstance(encryption_key, str):
             validate_encryption_key(encryption_key)
         elif isinstance(encryption_key, bytes):
