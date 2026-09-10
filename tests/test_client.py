@@ -180,7 +180,7 @@ async def test_new_connection_with_zero_stream_capacity_raises(pool: ConnectionP
             await pool.checkout("https://example.com")
 
         conn.close.assert_awaited_once()
-        assert pool._hosts["https://example.com"] == []
+        assert "https://example.com" not in pool._hosts
     await pool.close()
 
 
