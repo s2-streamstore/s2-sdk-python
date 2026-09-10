@@ -457,7 +457,7 @@ class S2:
         """Issue an access token.
 
         Args:
-            id: Unique identifier for the token (1--96 bytes).
+            id: Unique identifier for the token (1--96 bytes, no NUL bytes).
             scope: Permissions scope for the token.
             expires_at: Optional expiration time.
             auto_prefix_streams: Automatically prefix stream names during
@@ -487,7 +487,9 @@ class S2:
 
         Args:
             prefix: Filter to tokens whose ID starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List tokens whose ID is lexicographically after this value.
+                Must not contain NUL bytes.
             limit: Maximum number of tokens to return per page. Capped at 1000.
 
         Returns:
@@ -527,7 +529,9 @@ class S2:
 
         Args:
             prefix: Filter to tokens whose ID starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List tokens whose ID is lexicographically after this value.
+                Must not contain NUL bytes.
 
         Yields:
             :class:`AccessTokenInfo` for each token.
@@ -708,8 +712,8 @@ class S2Basin:
 
         Note:
             ``name`` must be unique within the basin. It can be an arbitrary string
-            up to 512 characters. ``/`` is recommended as a delimiter for
-            hierarchical naming.
+            up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
+            as a delimiter for hierarchical naming.
         """
         json: dict[str, Any] = {"stream": name}
         if config is not None:
@@ -749,8 +753,8 @@ class S2Basin:
 
         Note:
             ``name`` must be unique within the basin. It can be an arbitrary string
-            up to 512 characters. ``/`` is recommended as a delimiter for
-            hierarchical naming.
+            up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
+            as a delimiter for hierarchical naming.
         """
         json = stream_config_to_json(config)
         response = await self._retrier(
@@ -809,7 +813,9 @@ class S2Basin:
 
         Args:
             prefix: Filter to streams whose name starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List streams whose name is lexicographically after this value.
+                Must not contain NUL bytes.
             limit: Maximum number of streams to return per page. Capped at 1000.
 
         Returns:
@@ -847,7 +853,9 @@ class S2Basin:
 
         Args:
             prefix: Filter to streams whose name starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List streams whose name is lexicographically after this value.
+                Must not contain NUL bytes.
             include_deleted: Include streams that are being deleted.
 
         Yields:
