@@ -23,6 +23,18 @@ def validate_location(name: str) -> None:
     raise S2ClientError(f"Invalid location name: {name}")
 
 
+def validate_stream(name: str) -> None:
+    if isinstance(name, str) and 1 <= len(name.encode()) <= 512 and "\0" not in name:
+        return
+    raise S2ClientError(f"Invalid stream name: {name!r}")
+
+
+def validate_access_token_id(id: str) -> None:
+    if isinstance(id, str) and 1 <= len(id.encode()) <= 96 and "\0" not in id:
+        return
+    raise S2ClientError(f"Invalid access token ID: {id!r}")
+
+
 def validate_max_unacked(max_bytes: int, max_batches: int | None = None) -> None:
     if max_bytes < ONE_MIB:
         raise S2ClientError(

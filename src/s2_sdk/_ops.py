@@ -46,6 +46,7 @@ from s2_sdk._types import (
     metered_bytes,
 )
 from s2_sdk._validators import (
+    validate_access_token_id,
     validate_append_input,
     validate_basin,
     validate_batching,
@@ -53,6 +54,7 @@ from s2_sdk._validators import (
     validate_location,
     validate_max_unacked,
     validate_retry,
+    validate_stream,
 )
 
 
@@ -457,7 +459,7 @@ class S2:
         """Issue an access token.
 
         Args:
-            id: Unique identifier for the token (1--96 bytes).
+            id: Unique identifier for the token (1--96 bytes, no NUL bytes).
             scope: Permissions scope for the token.
             expires_at: Optional expiration time.
             auto_prefix_streams: Automatically prefix stream names during
@@ -466,6 +468,7 @@ class S2:
         Returns:
             The access token string.
         """
+        validate_access_token_id(id)
         json = access_token_info_to_json(id, scope, auto_prefix_streams, expires_at)
         response = await self._retrier(
             self._account_client.unary_request,
@@ -487,7 +490,9 @@ class S2:
 
         Args:
             prefix: Filter to tokens whose ID starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List tokens whose ID is lexicographically after this value.
+                Must not contain NUL bytes.
             limit: Maximum number of tokens to return per page. Capped at 1000.
 
         Returns:
@@ -527,7 +532,9 @@ class S2:
 
         Args:
             prefix: Filter to tokens whose ID starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List tokens whose ID is lexicographically after this value.
+                Must not contain NUL bytes.
 
         Yields:
             :class:`AccessTokenInfo` for each token.
@@ -708,9 +715,10 @@ class S2Basin:
 
         Note:
             ``name`` must be unique within the basin. It can be an arbitrary string
-            up to 512 characters. ``/`` is recommended as a delimiter for
-            hierarchical naming.
+            up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
+            as a delimiter for hierarchical naming.
         """
+        validate_stream(name)
         json: dict[str, Any] = {"stream": name}
         if config is not None:
             json["config"] = stream_config_to_json(config)
@@ -749,9 +757,10 @@ class S2Basin:
 
         Note:
             ``name`` must be unique within the basin. It can be an arbitrary string
-            up to 512 characters. ``/`` is recommended as a delimiter for
-            hierarchical naming.
+            up to 512 bytes, but must not contain NUL bytes. ``/`` is recommended
+            as a delimiter for hierarchical naming.
         """
+        validate_stream(name)
         json = stream_config_to_json(config)
         response = await self._retrier(
             self._client.unary_request, "PUT", _stream_path(name), json=json
@@ -784,6 +793,7 @@ class S2Basin:
         Tip:
             Also available via subscript: ``s2["my-basin"]["my-stream"]``.
         """
+        validate_stream(name)
         if isinstance(encryption_key, str):
             validate_encryption_key(encryption_key)
         elif isinstance(encryption_key, bytes):
@@ -809,7 +819,9 @@ class S2Basin:
 
         Args:
             prefix: Filter to streams whose name starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List streams whose name is lexicographically after this value.
+                Must not contain NUL bytes.
             limit: Maximum number of streams to return per page. Capped at 1000.
 
         Returns:
@@ -847,7 +859,9 @@ class S2Basin:
 
         Args:
             prefix: Filter to streams whose name starts with this prefix.
+                Must not contain NUL bytes.
             start_after: List streams whose name is lexicographically after this value.
+                Must not contain NUL bytes.
             include_deleted: Include streams that are being deleted.
 
         Yields:
