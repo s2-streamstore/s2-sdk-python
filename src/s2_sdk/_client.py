@@ -376,15 +376,26 @@ class ConnectionPool:
             except asyncio.TimeoutError:
                 pass  # Proceed with h2 defaults
 
+            if conn._goaway_received:
+                await conn.close()
+                raise ConnectError(
+                    f"Server sent GOAWAY on connection to {host}:{port} before "
+                    "an HTTP/2 request stream could be reserved"
+                )
+
             if conn._recv_dead:
                 await conn.close()
                 raise ConnectError(
-                    f"Connection to {host}:{port} closed before HTTP/2 SETTINGS"
+                    f"HTTP/2 receive loop for connection to {host}:{port} "
+                    "terminated before a request stream could be reserved"
                 )
 
             if conn._settings_received.is_set() and conn.max_concurrent_streams <= 0:
                 await conn.close()
-                raise ProtocolError("Connection has no available stream capacity")
+                raise ConnectError(
+                    f"Server's initial HTTP/2 SETTINGS for {host}:{port} "
+                    "advertised zero concurrent streams"
+                )
 
             pc = await self._add_connection(base_url, conn)
             state = pc._conn.reserve_stream()

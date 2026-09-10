@@ -13,8 +13,8 @@ from s2_sdk._client import (
     _StreamState,
 )
 from s2_sdk._exceptions import (
+    ConnectError,
     ConnectionClosedError,
-    ProtocolError,
     ReadTimeoutError,
     S2ClientError,
     S2ServerError,
@@ -37,6 +37,7 @@ def _mock_connection(
     conn.close = AsyncMock()
     conn._streams = {}
     conn._pending_streams = {}
+    conn._goaway_received = False
     conn._recv_dead = False
     conn._settings_received = asyncio.Event()
     conn._settings_received.set()
@@ -176,7 +177,7 @@ async def test_new_connection_with_zero_stream_capacity_raises(pool: ConnectionP
         conn = _mock_connection(max_concurrent_streams=0)
         MockConn.return_value = conn
 
-        with pytest.raises(ProtocolError, match="no available stream capacity"):
+        with pytest.raises(ConnectError, match="zero concurrent streams"):
             await pool.checkout("https://example.com")
 
         conn.close.assert_awaited_once()
