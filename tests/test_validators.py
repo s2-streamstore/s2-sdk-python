@@ -50,6 +50,10 @@ def test_stream_accepts_name():
     validate_stream("my/stream\tname \u00e9\U0001f600")
 
 
+def test_stream_accepts_max_length():
+    validate_stream("\u00e9" * 256)
+
+
 def test_stream_rejects_empty():
     with pytest.raises(S2ClientError):
         validate_stream("")
@@ -63,6 +67,15 @@ def test_stream_rejects_too_long():
 def test_stream_rejects_nul_byte():
     with pytest.raises(S2ClientError):
         validate_stream("a\0b")
+
+
+def test_access_token_id_accepts_max_length():
+    validate_access_token_id("a" * 96)
+
+
+def test_access_token_id_rejects_empty():
+    with pytest.raises(S2ClientError):
+        validate_access_token_id("")
 
 
 def test_access_token_id_rejects_too_long():
