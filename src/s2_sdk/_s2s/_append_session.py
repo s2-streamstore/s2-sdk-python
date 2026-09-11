@@ -120,7 +120,6 @@ async def run_append_session(
                         outcome is _AttemptOutcome.RECONNECT_ADVISED
                         and not session_state.inputs_exhausted
                     ):
-                        reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting append session on server advice")
                         continue
                     return
@@ -244,7 +243,7 @@ async def _run_attempt(
             if reconnect_advised and not reconnect_advice_seen:
                 reconnect_advice_seen = True
                 response.retire_connection()
-                if reconnect_limiter.should_reconnect_on_advice():
+                if reconnect_limiter.try_acquire_advised_reconnect():
                     advised_reconnect.set()
 
             if attempt.value > 0:

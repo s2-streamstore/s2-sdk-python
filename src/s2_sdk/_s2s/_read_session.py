@@ -102,7 +102,7 @@ async def run_read_session(
                         reconnect_advice_seen = True
                         response.retire_connection()
                         reconnect_after_delivery = (
-                            reconnect_limiter.should_reconnect_on_advice()
+                            reconnect_limiter.try_acquire_advised_reconnect()
                         )
 
                     proto_batch = pb.ReadBatch()
@@ -145,7 +145,6 @@ async def run_read_session(
                     if reconnect_after_delivery:
                         if remaining_count == 0 or remaining_bytes == 0:
                             return
-                        reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting read session on server advice")
                         yield _ReadSessionRetrying()
                         reconnect = True

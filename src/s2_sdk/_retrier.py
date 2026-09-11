@@ -79,10 +79,14 @@ class AdvisedReconnectLimiter:
     count: int = 0
     last_reconnect_at: float | None = None
 
-    def should_reconnect_on_advice(self) -> bool:
-        if not self._last_reconnect_is_recent():
-            return True
-        return self.count < _RECONNECT_COUNT_THRESHOLD
+    def try_acquire_advised_reconnect(self) -> bool:
+        if (
+            self._last_reconnect_is_recent()
+            and self.count >= _RECONNECT_COUNT_THRESHOLD
+        ):
+            return False
+        self.record_reconnect()
+        return True
 
     def record_reconnect(self) -> None:
         if not self._last_reconnect_is_recent():
