@@ -45,7 +45,7 @@ async def test_inflight_acks_drained_before_reconnect() -> None:
 
     attempts = [
         ((_ack(0, reconnect_advised=True), _ack(1)), 2),
-        ((), 0),
+        ((), None),
     ]
     responses: list[_Response] = []
 
@@ -59,8 +59,12 @@ async def test_inflight_acks_drained_before_reconnect() -> None:
         ) -> AsyncGenerator[_Response, None]:
             messages, inputs_to_consume = attempts.pop(0)
             if content is not None:
-                for _ in range(inputs_to_consume):
-                    await content.__anext__()
+                if inputs_to_consume is None:
+                    async for _ in content:
+                        pass
+                else:
+                    for _ in range(inputs_to_consume):
+                        await content.__anext__()
             response = _Response(messages)
             responses.append(response)
             try:

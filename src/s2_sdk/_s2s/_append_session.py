@@ -280,6 +280,10 @@ async def _run_attempt(
             )
         if advised_reconnect.is_set():
             return _AttemptOutcome.RECONNECT_ADVISED
+        if not session_state.inputs_exhausted:
+            raise S2ClientError(
+                "Append session response stream closed before the input source was exhausted"
+            )
         return _AttemptOutcome.COMPLETE
 
 
