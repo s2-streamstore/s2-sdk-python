@@ -56,7 +56,7 @@ class _AppendSessionState:
 
 class _AttemptOutcome(Enum):
     COMPLETE = auto()
-    RECONNECT = auto()
+    RECONNECT_ADVISED = auto()
 
 
 class _ReadAck(NamedTuple):
@@ -95,7 +95,7 @@ async def run_append_session(
         min_base_delay = retry.min_base_delay.total_seconds()
         max_base_delay = retry.max_base_delay.total_seconds()
         attempt = Attempt(0)
-        advised_reconnect_limiter = AdvisedReconnectLimiter()
+        reconnect_limiter = AdvisedReconnectLimiter()
         try:
             while True:
                 try:
@@ -113,13 +113,14 @@ async def run_append_session(
                         compression,
                         frame_signal,
                         ack_timeout,
-                        advised_reconnect_limiter,
+                        reconnect_limiter,
                         encryption_key,
                     )
                     if (
-                        outcome is _AttemptOutcome.RECONNECT
+                        outcome is _AttemptOutcome.RECONNECT_ADVISED
                         and not session_state.inputs_exhausted
                     ):
+                        reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting append session on server advice")
                         continue
                     return
@@ -132,7 +133,7 @@ async def run_append_session(
                     ):
                         return
                     if reconnect_required:
-                        advised_reconnect_limiter.record_reconnect()
+                        reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting append session while server drains")
                         continue
                     if attempt.value < max_retries and is_safe_to_retry_session(
@@ -185,7 +186,7 @@ async def _run_attempt(
     compression: Compression,
     frame_signal: FrameSignal | None,
     ack_timeout: float,
-    advised_reconnect_limiter: AdvisedReconnectLimiter,
+    reconnect_limiter: AdvisedReconnectLimiter,
     encryption_key: str | None = None,
 ) -> _AttemptOutcome:
     inflight_inputs = session_state.inflight_inputs
@@ -197,7 +198,7 @@ async def _run_attempt(
         headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
 
     ack_deadline_armed = asyncio.Event()
-    reconnect = asyncio.Event()
+    advised_reconnect = asyncio.Event()
     for resend_inp in resend_inputs:
         resend_inp.ack_deadline = None
 
@@ -212,7 +213,7 @@ async def _run_attempt(
             compression,
             ack_deadline_armed,
             ack_timeout,
-            reconnect,
+            advised_reconnect,
         ),
         frame_signal=frame_signal,
     ) as response:
@@ -228,7 +229,7 @@ async def _run_attempt(
         while True:
             try:
                 read_ack_coro = _read_ack(messages, inflight_inputs, ack_deadline_armed)
-                if reconnect.is_set() and not inflight_inputs:
+                if advised_reconnect.is_set() and not inflight_inputs:
                     read_ack = await asyncio.wait_for(
                         read_ack_coro, timeout=ack_timeout
                     )
@@ -243,8 +244,8 @@ async def _run_attempt(
             if reconnect_advised and not reconnect_advice_seen:
                 reconnect_advice_seen = True
                 response.retire_connection()
-                if advised_reconnect_limiter.try_acquire():
-                    reconnect.set()
+                if reconnect_limiter.should_reconnect_on_advice():
+                    advised_reconnect.set()
 
             if attempt.value > 0:
                 attempt.value = 0
@@ -278,8 +279,8 @@ async def _run_attempt(
                 f"Append session response stream closed with {len(inflight_inputs)} "
                 "unacknowledged batches"
             )
-        if reconnect.is_set():
-            return _AttemptOutcome.RECONNECT
+        if advised_reconnect.is_set():
+            return _AttemptOutcome.RECONNECT_ADVISED
         return _AttemptOutcome.COMPLETE
 
 
@@ -341,7 +342,7 @@ async def _body_gen(
     compression: Compression,
     ack_deadline_armed: asyncio.Event,
     ack_timeout: float,
-    reconnect: asyncio.Event,
+    advised_reconnect: asyncio.Event,
 ) -> AsyncGenerator[bytes]:
     inflight_inputs = session_state.inflight_inputs
     loop = asyncio.get_running_loop()
@@ -358,16 +359,16 @@ async def _body_gen(
         logger.debug("finished resending unacknowledged appends")
 
     while True:
-        if reconnect.is_set():
+        if advised_reconnect.is_set():
             return
         try:
             inp = input_queue.get_nowait()
         except asyncio.QueueEmpty:
             input_task = asyncio.create_task(input_queue.get())
-            reconnect_task = asyncio.create_task(reconnect.wait())
+            advised_reconnect_task = asyncio.create_task(advised_reconnect.wait())
             try:
                 await asyncio.wait(
-                    {input_task, reconnect_task},
+                    {input_task, advised_reconnect_task},
                     return_when=asyncio.FIRST_COMPLETED,
                 )
                 if not input_task.done():
@@ -375,8 +376,10 @@ async def _body_gen(
                 inp = input_task.result()
             finally:
                 input_task.cancel()
-                reconnect_task.cancel()
-                await asyncio.gather(input_task, reconnect_task, return_exceptions=True)
+                advised_reconnect_task.cancel()
+                await asyncio.gather(
+                    input_task, advised_reconnect_task, return_exceptions=True
+                )
         if inp is None:
             await input_queue.put(None)
             session_state.inputs_exhausted = True

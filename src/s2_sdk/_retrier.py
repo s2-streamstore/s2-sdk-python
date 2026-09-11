@@ -18,8 +18,8 @@ from s2_sdk._types import AppendRetryPolicy
 
 logger = logging.getLogger(__name__)
 
-_MAX_RECONNECTS_PER_WINDOW = 1
-_RECONNECT_WINDOW = 60.0
+_RECONNECT_COUNT_THRESHOLD = 1
+_RECONNECT_RECENCY_THRESHOLD = 60.0
 
 
 class Retrier:
@@ -79,24 +79,22 @@ class AdvisedReconnectLimiter:
     count: int = 0
     last_reconnect_at: float | None = None
 
-    def try_acquire(self) -> bool:
-        if not self._is_recent():
-            self.count = 0
-        if self.count >= _MAX_RECONNECTS_PER_WINDOW:
-            return False
-        self.record_reconnect()
-        return True
+    def should_reconnect_on_advice(self) -> bool:
+        if not self._last_reconnect_is_recent():
+            return True
+        return self.count < _RECONNECT_COUNT_THRESHOLD
 
     def record_reconnect(self) -> None:
-        if not self._is_recent():
+        if not self._last_reconnect_is_recent():
             self.count = 0
         self.last_reconnect_at = time.monotonic()
         self.count += 1
 
-    def _is_recent(self) -> bool:
+    def _last_reconnect_is_recent(self) -> bool:
         return (
             self.last_reconnect_at is not None
-            and time.monotonic() - self.last_reconnect_at <= _RECONNECT_WINDOW
+            and time.monotonic() - self.last_reconnect_at
+            <= _RECONNECT_RECENCY_THRESHOLD
         )
 
 

@@ -55,7 +55,7 @@ async def run_read_session(
     min_base_delay = retry.min_base_delay.total_seconds()
     max_base_delay = retry.max_base_delay.total_seconds()
     attempt = Attempt(0)
-    advised_reconnect_limiter = AdvisedReconnectLimiter()
+    reconnect_limiter = AdvisedReconnectLimiter()
 
     remaining_count = limit.count if limit and limit.count is not None else None
     remaining_bytes = limit.bytes if limit and limit.bytes is not None else None
@@ -102,7 +102,7 @@ async def run_read_session(
                         reconnect_advice_seen = True
                         response.retire_connection()
                         reconnect_after_delivery = (
-                            advised_reconnect_limiter.try_acquire()
+                            reconnect_limiter.should_reconnect_on_advice()
                         )
 
                     proto_batch = pb.ReadBatch()
@@ -145,6 +145,7 @@ async def run_read_session(
                     if reconnect_after_delivery:
                         if remaining_count == 0 or remaining_bytes == 0:
                             return
+                        reconnect_limiter.record_reconnect()
                         logger.debug("reconnecting read session on server advice")
                         yield _ReadSessionRetrying()
                         reconnect = True
@@ -160,7 +161,7 @@ async def run_read_session(
             if http_retry_on(e) and (reconnect_required or attempt.value < max_retries):
                 yield _ReadSessionRetrying()
                 if reconnect_required:
-                    advised_reconnect_limiter.record_reconnect()
+                    reconnect_limiter.record_reconnect()
                     backoff = 0.0
                     logger.debug("reconnecting read session while server drains")
                 else:
