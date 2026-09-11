@@ -83,11 +83,9 @@ async def run_append_session(
         frame_signal = FrameSignal()
 
     async def pipe_inputs():
-        try:
-            async for inp in inputs:
-                await input_queue.put(inp)
-        finally:
-            await input_queue.put(None)
+        async for inp in inputs:
+            await input_queue.put(inp)
+        await input_queue.put(None)
 
     async def retrying_inner():
         session_state = _AppendSessionState()
@@ -96,73 +94,71 @@ async def run_append_session(
         max_base_delay = retry.max_base_delay.total_seconds()
         attempt = Attempt(0)
         reconnect_limiter = AdvisedReconnectLimiter()
-        try:
-            while True:
-                try:
-                    resend_inputs = tuple(session_state.inflight_inputs)
-                    if frame_signal is not None:
-                        frame_signal.reset()
-                    outcome = await _run_attempt(
-                        client,
-                        stream_name,
-                        attempt,
-                        session_state,
-                        input_queue,
-                        ack_queue,
-                        resend_inputs,
-                        compression,
-                        frame_signal,
-                        ack_timeout,
-                        reconnect_limiter,
-                        encryption_key,
+        while True:
+            try:
+                resend_inputs = tuple(session_state.inflight_inputs)
+                if frame_signal is not None:
+                    frame_signal.reset()
+                outcome = await _run_attempt(
+                    client,
+                    stream_name,
+                    attempt,
+                    session_state,
+                    input_queue,
+                    ack_queue,
+                    resend_inputs,
+                    compression,
+                    frame_signal,
+                    ack_timeout,
+                    reconnect_limiter,
+                    encryption_key,
+                )
+                if (
+                    outcome is _AttemptOutcome.RECONNECT_ADVISED
+                    and not session_state.inputs_exhausted
+                ):
+                    logger.debug("reconnecting append session on server advice")
+                    continue
+                break
+            except Exception as e:
+                reconnect_required = requires_reconnect(e)
+                if (
+                    reconnect_required
+                    and session_state.inputs_exhausted
+                    and not session_state.inflight_inputs
+                ):
+                    break
+                if reconnect_required:
+                    reconnect_limiter.record_reconnect()
+                    logger.debug("reconnecting append session while server drains")
+                    continue
+                if attempt.value < max_retries and is_safe_to_retry_session(
+                    e,
+                    retry.append_retry_policy,
+                    bool(session_state.inflight_inputs),
+                    frame_signal,
+                ):
+                    backoff = compute_backoff(
+                        attempt.value,
+                        min_base_delay=min_base_delay,
+                        max_base_delay=max_base_delay,
                     )
-                    if (
-                        outcome is _AttemptOutcome.RECONNECT_ADVISED
-                        and not session_state.inputs_exhausted
-                    ):
-                        logger.debug("reconnecting append session on server advice")
-                        continue
-                    return
-                except Exception as e:
-                    reconnect_required = requires_reconnect(e)
-                    if (
-                        reconnect_required
-                        and session_state.inputs_exhausted
-                        and not session_state.inflight_inputs
-                    ):
-                        return
-                    if reconnect_required:
-                        reconnect_limiter.record_reconnect()
-                        logger.debug("reconnecting append session while server drains")
-                        continue
-                    if attempt.value < max_retries and is_safe_to_retry_session(
+                    logger.debug(
+                        "retrying append session: error=%s backoff=%.3fs retries_remaining=%d",
                         e,
-                        retry.append_retry_policy,
-                        bool(session_state.inflight_inputs),
-                        frame_signal,
-                    ):
-                        backoff = compute_backoff(
-                            attempt.value,
-                            min_base_delay=min_base_delay,
-                            max_base_delay=max_base_delay,
-                        )
-                        logger.debug(
-                            "retrying append session: error=%s backoff=%.3fs retries_remaining=%d",
-                            e,
-                            backoff,
-                            max_retries - attempt.value - 1,
-                        )
-                        await asyncio.sleep(backoff)
-                        attempt.value += 1
-                    else:
-                        logger.debug(
-                            "not retrying append session: error=%s retries_exhausted=%s",
-                            e,
-                            attempt.value >= max_retries,
-                        )
-                        raise
-        finally:
-            await ack_queue.put(None)
+                        backoff,
+                        max_retries - attempt.value - 1,
+                    )
+                    await asyncio.sleep(backoff)
+                    attempt.value += 1
+                else:
+                    logger.debug(
+                        "not retrying append session: error=%s retries_exhausted=%s",
+                        e,
+                        attempt.value >= max_retries,
+                    )
+                    raise
+        await ack_queue.put(None)
 
     async with asyncio.TaskGroup() as tg:
         tg.create_task(retrying_inner())
