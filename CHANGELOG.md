@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.9.0...v0.10.0) (2026-09-12)
+
+
+### Features
+
+* validate stream names and access token IDs (reject NUL bytes) ([#114](https://github.com/s2-streamstore/s2-sdk-python/issues/114)) ([c18d589](https://github.com/s2-streamstore/s2-sdk-python/commit/c18d5893ced88c9a656c8ad091eee69f21a7eb81))
+
+
+### Bug Fixes
+
+* automatic batching can exceed `max_bytes` ([#123](https://github.com/s2-streamstore/s2-sdk-python/issues/123)) ([3508dd2](https://github.com/s2-streamstore/s2-sdk-python/commit/3508dd226e570dc658c738cd875cb886be6ea6d0))
+* conns opened while closing the pool are not closed  ([#121](https://github.com/s2-streamstore/s2-sdk-python/issues/121)) ([6e3cd2f](https://github.com/s2-streamstore/s2-sdk-python/commit/6e3cd2f4d15cfc5bed16659bb289820e583fe22a))
+* conns that received `GOAWAY` during checkout are added to the pool ([#122](https://github.com/s2-streamstore/s2-sdk-python/issues/122)) ([ef430fc](https://github.com/s2-streamstore/s2-sdk-python/commit/ef430fc5f541dc7df981f8adedfe0671ad9214a2))
+* missing input exhaustion check before append session completion ([#125](https://github.com/s2-streamstore/s2-sdk-python/issues/125)) ([298766c](https://github.com/s2-streamstore/s2-sdk-python/commit/298766c379b627796aab0446f422fc45fb18b31d))
+* queue sentinels in `finally` can hang append session during task cancellation ([#129](https://github.com/s2-streamstore/s2-sdk-python/issues/129)) ([564851e](https://github.com/s2-streamstore/s2-sdk-python/commit/564851e5a9ef885016360b860d37d76737304698))
+
 ## [0.9.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.8.0...v0.9.0) (2026-09-09)
 
 
