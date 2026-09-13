@@ -11,7 +11,11 @@ import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
 from s2_sdk._frame_signal import FrameSignal
-from s2_sdk._mappers import append_ack_from_proto, append_input_to_proto
+from s2_sdk._mappers import (
+    append_ack_from_proto,
+    append_input_to_proto,
+    stream_config_header,
+)
 from s2_sdk._retrier import (
     AdvisedReconnectLimiter,
     Attempt,
@@ -29,11 +33,13 @@ from s2_sdk._s2s._protocol import (
 )
 from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
+    _S2_STREAM_CONFIG_HEADER,
     AppendAck,
     AppendInput,
     AppendRetryPolicy,
     Compression,
     Retry,
+    StreamConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,6 +78,7 @@ async def run_append_session(
     compression: Compression,
     ack_timeout: float,
     encryption_key: str | None = None,
+    stream_config: StreamConfig | None = None,
 ) -> AsyncIterable[AppendAck]:
     input_queue: asyncio.Queue[AppendInput | None] = asyncio.Queue(
         maxsize=_QUEUE_MAX_SIZE
@@ -112,6 +119,7 @@ async def run_append_session(
                     ack_timeout,
                     reconnect_limiter,
                     encryption_key,
+                    stream_config,
                 )
                 if (
                     outcome is _AttemptOutcome.RECONNECT_ADVISED
@@ -183,6 +191,7 @@ async def _run_attempt(
     ack_timeout: float,
     reconnect_limiter: AdvisedReconnectLimiter,
     encryption_key: str | None = None,
+    stream_config: StreamConfig | None = None,
 ) -> _AttemptOutcome:
     inflight_inputs = session_state.inflight_inputs
     headers = {
@@ -191,6 +200,8 @@ async def _run_attempt(
     }
     if encryption_key is not None:
         headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
+    if stream_config is not None:
+        headers[_S2_STREAM_CONFIG_HEADER] = stream_config_header(stream_config)
 
     ack_deadline_armed = asyncio.Event()
     advised_reconnect = asyncio.Event()

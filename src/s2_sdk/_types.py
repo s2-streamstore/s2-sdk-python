@@ -12,6 +12,7 @@ T = TypeVar("T")
 
 ONE_MIB = 1024 * 1024
 _S2_ENCRYPTION_KEY_HEADER = "s2-encryption-key"
+_S2_STREAM_CONFIG_HEADER = "s2-stream-config"
 
 
 def _parse_scheme(url: str) -> str:
@@ -165,6 +166,13 @@ class AppendInput:
     fencing_token: str | None = None
     """Fencing token to match against the stream's current fencing token. If unset, no matching
     is performed. If set and mismatched, the append fails."""
+
+    stream_config: StreamConfig | None = None
+    """Configuration to apply if the stream is created on append. Unset fields inherit the
+    basin's default stream configuration. Ignored if the stream already exists.
+
+    Only used by :meth:`~S2Stream.append`. Sessions take ``stream_config`` when opened instead;
+    see :meth:`~S2Stream.append_session`."""
 
 
 @dataclass(slots=True)
