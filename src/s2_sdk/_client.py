@@ -432,6 +432,9 @@ class ConnectionPool:
             await asyncio.sleep(REAPER_INTERVAL)
             empty_hosts: list[str] = []
             for base_url, conns in tuple(self._hosts.items()):
+                num_usable_conns = sum(
+                    not pc.is_retired and pc._conn.is_available for pc in conns
+                )
                 to_close: list[_PooledConnection] = []
                 for pc in conns:
                     if pc.is_retired:
@@ -444,9 +447,10 @@ class ConnectionPool:
                     elif (
                         pc.is_idle
                         and pc.idle_for() > IDLE_TIMEOUT
-                        and len(conns) - len(to_close) > 1
+                        and num_usable_conns > 1
                     ):
                         to_close.append(pc)
+                        num_usable_conns -= 1
                 for pc in to_close:
                     conns.remove(pc)
                 for pc in to_close:
