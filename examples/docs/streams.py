@@ -18,6 +18,7 @@ from s2_sdk import (
     ReadLimit,
     Record,
     SeqNum,
+    StreamConfig,
     TailOffset,
     Timestamp,
 )
@@ -110,6 +111,25 @@ async def check_tail_example(stream):
     tail = await stream.check_tail()
     print(f"Stream has {tail.seq_num} records")
     # ANCHOR_END: check-tail
+
+
+async def auto_create_config_example(stream):
+    # ANCHOR: auto-create-config
+    # Applied only if the stream is created by this call; ignored if it exists.
+    # Unset fields inherit the basin's default stream configuration.
+    stream_config = StreamConfig(retention_policy=3600)
+
+    await stream.append(
+        AppendInput(records=[Record(body=b"hello")], stream_config=stream_config)
+    )
+    await stream.read(start=SeqNum(0), stream_config=stream_config)
+
+    # Sessions send the config each time they connect.
+    async with stream.append_session(stream_config=stream_config) as session:
+        await session.submit(AppendInput(records=[Record(body=b"hello")]))
+    async with stream.read_session(start=SeqNum(0), stream_config=stream_config):
+        pass
+    # ANCHOR_END: auto-create-config
 
 
 async def read_session_example(stream):

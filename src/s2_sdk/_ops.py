@@ -27,6 +27,7 @@ from s2_sdk._mappers import (
     read_limit_params,
     read_start_params,
     stream_config_from_json,
+    stream_config_header,
     stream_config_to_json,
     stream_info_from_json,
     stream_reconfiguration_to_json,
@@ -38,6 +39,7 @@ from s2_sdk._retrier import Retrier, http_retry_on, is_safe_to_retry_unary
 from s2_sdk._s2s._read_session import run_read_session
 from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
+    _S2_STREAM_CONFIG_HEADER,
     ONE_MIB,
     Compression,
     Endpoints,
@@ -985,12 +987,17 @@ class S2Stream:
         return self._name
 
     def _request_headers(
-        self, headers: dict[str, str] | None = None
+        self,
+        headers: dict[str, str] | None = None,
+        stream_config: types.StreamConfig | None = None,
     ) -> dict[str, str] | None:
-        if self._encryption_key is None:
+        if self._encryption_key is None and stream_config is None:
             return headers
         merged = dict(headers or {})
-        merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key
+        if self._encryption_key is not None:
+            merged[_S2_ENCRYPTION_KEY_HEADER] = self._encryption_key
+        if stream_config is not None:
+            merged[_S2_STREAM_CONFIG_HEADER] = stream_config_header(stream_config)
         return merged
 
     @fallible
@@ -1031,7 +1038,8 @@ class S2Stream:
                 {
                     "content-type": "application/x-protobuf",
                     "accept": "application/x-protobuf",
-                }
+                },
+                inp.stream_config,
             ),
         )
         ack = pb.AppendAck()
@@ -1044,6 +1052,7 @@ class S2Stream:
         *,
         max_unacked_bytes: int = 5 * ONE_MIB,
         max_unacked_batches: int | None = None,
+        stream_config: types.StreamConfig | None = None,
     ) -> AppendSession:
         """Open a session for appending batches of records continuously.
 
@@ -1054,6 +1063,10 @@ class S2Stream:
                 batches before backpressure is applied. Default is 5 MiB.
             max_unacked_batches: Maximum number of unacknowledged batches
                 before backpressure is applied. If ``None``, no limit is applied.
+            stream_config: Configuration to apply if the stream is created by
+                the session. Unset fields inherit the basin's default stream
+                configuration. Ignored if the stream already exists. Sent
+                whenever the session connects.
 
         Returns:
             An :class:`AppendSession` to use as an async context manager.
@@ -1078,6 +1091,7 @@ class S2Stream:
             max_unacked_bytes=max_unacked_bytes,
             max_unacked_batches=max_unacked_batches,
             encryption_key=self._encryption_key,
+            stream_config=stream_config,
         )
 
     @fallible
@@ -1088,6 +1102,7 @@ class S2Stream:
         match_seq_num: int | None = None,
         batching: types.Batching | None = None,
         max_unacked_bytes: int = 5 * ONE_MIB,
+        stream_config: types.StreamConfig | None = None,
     ) -> Producer:
         """Open a producer with per-record submit and auto-batching.
 
@@ -1099,6 +1114,10 @@ class S2Stream:
                 values are used. See :class:`Batching`.
             max_unacked_bytes: Maximum total metered bytes of unacknowledged
                 batches before backpressure is applied. Default is 5 MiB.
+            stream_config: Configuration to apply if the stream is created by
+                the producer. Unset fields inherit the basin's default stream
+                configuration. Ignored if the stream already exists. Sent
+                whenever the underlying session connects.
 
         Returns:
             A :class:`Producer` to use as an async context manager.
@@ -1128,6 +1147,7 @@ class S2Stream:
             match_seq_num=match_seq_num,
             max_unacked_bytes=max_unacked_bytes,
             batching=batching,
+            stream_config=stream_config,
         )
 
     @fallible
@@ -1140,6 +1160,7 @@ class S2Stream:
         clamp_to_tail: bool = False,
         wait: int | None = None,
         ignore_command_records: bool = False,
+        stream_config: types.StreamConfig | None = None,
     ) -> types.ReadBatch:
         """Read a batch of records from a stream.
 
@@ -1152,6 +1173,9 @@ class S2Stream:
                 exceeds the tail, instead of raising.
             wait: Number of seconds to wait for records before returning.
             ignore_command_records: Filter out command records from the batch.
+            stream_config: Configuration to apply if the stream is created on
+                read. Unset fields inherit the basin's default stream
+                configuration. Ignored if the stream already exists.
 
         Returns:
             A :class:`ReadBatch` containing sequenced records and an optional
@@ -1173,7 +1197,9 @@ class S2Stream:
             "GET",
             _stream_path(self.name, "/records"),
             params=params,
-            headers=self._request_headers({"accept": "application/x-protobuf"}),
+            headers=self._request_headers(
+                {"accept": "application/x-protobuf"}, stream_config
+            ),
         )
 
         proto_batch = pb.ReadBatch()
@@ -1196,6 +1222,7 @@ class S2Stream:
         clamp_to_tail: bool = False,
         wait: int | None = None,
         ignore_command_records: bool = False,
+        stream_config: types.StreamConfig | None = None,
     ) -> ReadSession:
         """Read batches of records from a stream continuously.
 
@@ -1210,6 +1237,10 @@ class S2Stream:
             wait: Number of seconds to wait for new records when the tail is
                 reached.
             ignore_command_records: Filter out command records from batches.
+            stream_config: Configuration to apply if the stream is created by
+                the session. Unset fields inherit the basin's default stream
+                configuration. Ignored if the stream already exists. Sent
+                whenever the session connects.
 
         Returns:
             A :class:`ReadSession` that yields batches of records.
@@ -1232,6 +1263,7 @@ class S2Stream:
                 wait,
                 retry=self._retry,
                 encryption_key=self._encryption_key,
+                stream_config=stream_config,
             ),
             ignore_command_records=ignore_command_records,
         )

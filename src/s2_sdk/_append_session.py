@@ -17,6 +17,7 @@ from s2_sdk._types import (
     AppendInput,
     Compression,
     Retry,
+    StreamConfig,
     metered_bytes,
 )
 from s2_sdk._validators import validate_append_input
@@ -48,6 +49,7 @@ class AppendSession:
         "_permits",
         "_input_queue",
         "_retry",
+        "_stream_config",
         "_stream_name",
         "_task",
         "_unacked",
@@ -62,12 +64,14 @@ class AppendSession:
         max_unacked_bytes: int,
         max_unacked_batches: int | None,
         encryption_key: str | None = None,
+        stream_config: StreamConfig | None = None,
     ) -> None:
         self._client = client
         self._stream_name = stream_name
         self._retry = retry
         self._compression = compression
         self._encryption_key = encryption_key
+        self._stream_config = stream_config
         self._permits = _AppendPermits(max_unacked_bytes, max_unacked_batches)
 
         self._input_queue: asyncio.Queue[AppendInput | None] = asyncio.Queue()
@@ -134,6 +138,7 @@ class AppendSession:
                 compression=self._compression,
                 ack_timeout=self._client._request_timeout,
                 encryption_key=self._encryption_key,
+                stream_config=self._stream_config,
             ):
                 unacked = self._unacked.popleft()
                 self._permits.release(unacked.metered_bytes)

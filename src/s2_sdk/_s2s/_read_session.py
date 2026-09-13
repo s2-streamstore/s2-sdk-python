@@ -8,7 +8,12 @@ from typing import Any
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ReadTimeoutError, S2ClientError
-from s2_sdk._mappers import read_batch_from_proto, read_limit_params, read_start_params
+from s2_sdk._mappers import (
+    read_batch_from_proto,
+    read_limit_params,
+    read_start_params,
+    stream_config_header,
+)
 from s2_sdk._read_session import (
     _ReadSessionBatch,
     _ReadSessionEvent,
@@ -26,9 +31,11 @@ from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import parse_error_info, read_messages
 from s2_sdk._types import (
     _S2_ENCRYPTION_KEY_HEADER,
+    _S2_STREAM_CONFIG_HEADER,
     ReadLimit,
     Retry,
     SeqNum,
+    StreamConfig,
     TailOffset,
     Timestamp,
     metered_bytes,
@@ -49,6 +56,7 @@ async def run_read_session(
     wait: int | None,
     retry: Retry,
     encryption_key: str | None = None,
+    stream_config: StreamConfig | None = None,
 ) -> AsyncGenerator[_ReadSessionEvent, None]:
     params = _build_read_params(start, limit, until_timestamp, clamp_to_tail, wait)
     max_retries = retry._max_retries()
@@ -65,6 +73,8 @@ async def run_read_session(
     headers = {"content-type": "s2s/proto"}
     if encryption_key is not None:
         headers[_S2_ENCRYPTION_KEY_HEADER] = encryption_key
+    if stream_config is not None:
+        headers[_S2_STREAM_CONFIG_HEADER] = stream_config_header(stream_config)
 
     while True:
         if wait is not None:
