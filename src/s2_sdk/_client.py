@@ -318,6 +318,7 @@ class ConnectionPool:
     __slots__ = (
         "_closed",
         "_connect_timeout",
+        "_checkout_new_conn_tasks",
         "_hosts",
         "_host_locks",
         "_reaper_task",
@@ -326,6 +327,7 @@ class ConnectionPool:
 
     def __init__(self, connect_timeout: float) -> None:
         self._connect_timeout = connect_timeout
+        self._checkout_new_conn_tasks: set[asyncio.Task[_Checkout]] = set()
         self._hosts: dict[str, list[_PooledConnection]] = {}
         self._host_locks: dict[str, asyncio.Lock] = {}
         self._reaper_task: asyncio.Task[None] | None = None
@@ -349,21 +351,28 @@ class ConnectionPool:
             self._host_locks[base_url] = lock
 
         async with lock:
-            # Re-check after acquiring lock — another caller may have
-            # created a connection while we waited.
+            if self._closed:
+                raise S2ClientError("Pool is closed")
             checkout = self._try_checkout(base_url)
             if checkout is not None:
                 return checkout
 
-            scheme, host, port = _origin(base_url)
-            use_ssl = self._ssl_context if scheme == "https" else None
+            checkout_task = asyncio.create_task(self._checkout_new_conn(base_url))
+            self._checkout_new_conn_tasks.add(checkout_task)
+            checkout_task.add_done_callback(self._checkout_new_conn_tasks.discard)
+            return await checkout_task
 
-            conn = Connection(
-                host=host,
-                port=port,
-                ssl_context=use_ssl,
-                connect_timeout=self._connect_timeout,
-            )
+    async def _checkout_new_conn(self, base_url: str) -> _Checkout:
+        scheme, host, port = _origin(base_url)
+        use_ssl = self._ssl_context if scheme == "https" else None
+        conn = Connection(
+            host=host,
+            port=port,
+            ssl_context=use_ssl,
+            connect_timeout=self._connect_timeout,
+        )
+        owned_by_pool = False
+        try:
             await conn.connect()
 
             # Wait briefly for the server's initial SETTINGS frame so
@@ -377,40 +386,31 @@ class ConnectionPool:
                 pass  # Proceed with h2 defaults
 
             if conn._goaway_received:
-                await conn.close()
                 raise ConnectError(
                     f"Server sent GOAWAY on connection to {host}:{port} before "
                     "an HTTP/2 request stream could be reserved"
                 )
-
             if conn._recv_dead:
-                await conn.close()
                 raise ConnectError(
                     f"HTTP/2 receive loop for connection to {host}:{port} "
                     "terminated before a request stream could be reserved"
                 )
-
             if conn._settings_received.is_set() and conn.max_concurrent_streams <= 0:
-                await conn.close()
                 raise ConnectError(
                     f"Server's initial HTTP/2 SETTINGS for {host}:{port} "
                     "advertised zero concurrent streams"
                 )
+            if self._closed:
+                raise S2ClientError("Pool is closed")
 
-            pc = await self._add_connection(base_url, conn)
-            state = pc._conn.reserve_stream()
+            pc = _PooledConnection(conn)
+            state = conn.reserve_stream()
+            self._hosts.setdefault(base_url, []).append(pc)
+            owned_by_pool = True
             return _Checkout(pc, state)
-
-    async def _add_connection(
-        self, base_url: str, conn: Connection
-    ) -> _PooledConnection:
-        if self._closed:
-            await conn.close()
-            raise S2ClientError("Pool is closed")
-
-        pc = _PooledConnection(conn)
-        self._hosts.setdefault(base_url, []).append(pc)
-        return pc
+        finally:
+            if not owned_by_pool:
+                await conn.close()
 
     def _try_checkout(self, base_url: str) -> _Checkout | None:
         conns = self._hosts.get(base_url)
@@ -464,7 +464,14 @@ class ConnectionPool:
         if self._reaper_task is not None:
             self._reaper_task.cancel()
             await asyncio.gather(self._reaper_task, return_exceptions=True)
-        for conns in self._hosts.values():
+
+        checkout_tasks = tuple(self._checkout_new_conn_tasks)
+        for task in checkout_tasks:
+            if not task.cancelling():
+                task.cancel()
+        await asyncio.gather(*checkout_tasks, return_exceptions=True)
+
+        for conns in tuple(self._hosts.values()):
             for pc in conns:
                 await pc.close()
         self._hosts.clear()
