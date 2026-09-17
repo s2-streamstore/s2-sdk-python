@@ -26,6 +26,7 @@ from s2_sdk import (
     S2Stream,
     SeqNum,
     SeqNumMismatchError,
+    StorageClass,
     StreamConfig,
     TailOffset,
     Timestamp,
@@ -803,6 +804,117 @@ class TestStreamOperations:
                 async for _ in session:
                     pass
         assert exc_info.value.tail.seq_num == 0
+
+
+@pytest.mark.stream
+class TestAutoCreateStreamConfig:
+    async def _run_with_stream_config(
+        self,
+        stream: S2Stream,
+        operation: str,
+        config: StreamConfig,
+    ) -> None:
+        if operation == "append":
+            await stream.append(
+                AppendInput(
+                    records=[Record(body=b"auto-created")], stream_config=config
+                )
+            )
+        elif operation == "append_session":
+            async with stream.append_session(stream_config=config) as session:
+                ticket = await session.submit(
+                    AppendInput(records=[Record(body=b"auto-created")])
+                )
+                await ticket
+        elif operation == "producer":
+            async with stream.producer(stream_config=config) as producer:
+                ticket = await producer.submit(Record(body=b"auto-created"))
+                await ticket
+        elif operation == "read":
+            with pytest.raises(ReadUnwrittenError):
+                await stream.read(start=SeqNum(0), stream_config=config)
+        elif operation == "read_session":
+            with pytest.raises(ReadUnwrittenError):
+                async with stream.read_session(
+                    start=SeqNum(0),
+                    limit=ReadLimit(count=1),
+                    stream_config=config,
+                ) as session:
+                    async for _ in session:
+                        pass
+        else:
+            raise AssertionError(f"unsupported operation: {operation}")
+
+    @pytest.mark.parametrize(
+        "operation", ["append", "append_session", "producer", "read", "read_session"]
+    )
+    async def test_auto_create_config_overrides_basin_defaults_and_inherits_unset_fields(
+        self,
+        s2: S2,
+        basin: S2Basin,
+        stream_name: str,
+        operation: str,
+    ):
+        await s2.reconfigure_basin(
+            basin.name,
+            config=BasinConfig(
+                create_stream_on_append=True,
+                create_stream_on_read=True,
+                default_stream_config=StreamConfig(
+                    storage_class=StorageClass.STANDARD,
+                    retention_policy=7200,
+                ),
+            ),
+        )
+        stream_config = StreamConfig(
+            retention_policy=3600,
+            timestamping=Timestamping(
+                mode=TimestampingMode.CLIENT_PREFER,
+                uncapped=True,
+            ),
+            delete_on_empty_min_age=3600,
+        )
+
+        await self._run_with_stream_config(
+            basin.stream(stream_name), operation, stream_config
+        )
+
+        actual = await basin.get_stream_config(stream_name)
+        assert actual.storage_class == StorageClass.STANDARD
+        assert actual.retention_policy == 3600
+        assert actual.timestamping is not None
+        assert actual.timestamping.mode == TimestampingMode.CLIENT_PREFER
+        assert actual.timestamping.uncapped is True
+        assert actual.delete_on_empty_min_age == 3600
+
+    @pytest.mark.parametrize(
+        "operation", ["append", "append_session", "producer", "read", "read_session"]
+    )
+    async def test_auto_create_config_is_ignored_for_existing_stream(
+        self,
+        basin: S2Basin,
+        stream_name: str,
+        operation: str,
+    ):
+        await basin.create_stream(
+            stream_name,
+            config=StreamConfig(
+                storage_class=StorageClass.EXPRESS,
+                retention_policy=7200,
+            ),
+        )
+        await self._run_with_stream_config(
+            basin.stream(stream_name),
+            operation,
+            StreamConfig(
+                storage_class=StorageClass.STANDARD,
+                retention_policy=3600,
+            ),
+        )
+
+        actual = await basin.get_stream_config(stream_name)
+        assert actual.storage_class == StorageClass.EXPRESS
+        assert actual.retention_policy == 7200
 
 
 @pytest.mark.stream
