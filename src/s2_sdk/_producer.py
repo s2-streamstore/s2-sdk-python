@@ -24,6 +24,7 @@ from s2_sdk._types import (
     IndexedAppendAck,
     Record,
     Retry,
+    StreamConfig,
 )
 
 
@@ -74,6 +75,7 @@ class Producer:
         max_unacked_bytes: int,
         batching: Batching,
         encryption_key: str | None = None,
+        stream_config: StreamConfig | None = None,
     ) -> None:
         self._session = AppendSession(
             client=client,
@@ -83,6 +85,7 @@ class Producer:
             max_unacked_bytes=max_unacked_bytes,
             max_unacked_batches=None,
             encryption_key=encryption_key,
+            stream_config=stream_config,
         )
         self._fencing_token = fencing_token
         self._match_seq_num = match_seq_num

@@ -1,3 +1,4 @@
+import json
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any, Literal
@@ -112,6 +113,10 @@ def stream_config_to_json(config: StreamConfig | None) -> dict[str, Any] | None:
 
 def stream_reconfiguration_to_json(config: StreamConfig) -> dict[str, Any]:
     return stream_config_to_json(config) or {}
+
+
+def stream_config_header(config: StreamConfig) -> str:
+    return json.dumps(stream_config_to_json(config) or {})
 
 
 def stream_config_from_json(data: dict[str, Any]) -> StreamConfig:
