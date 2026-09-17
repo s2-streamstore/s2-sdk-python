@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.10.0...v0.11.0) (2026-09-17)
+
+
+### Features
+
+* support stream configuration during on-demand stream creation ([#130](https://github.com/s2-streamstore/s2-sdk-python/issues/130)) ([c0aa081](https://github.com/s2-streamstore/s2-sdk-python/commit/c0aa0815a80552133d6278522f0538b8da1f6bc0))
+
 ## [0.10.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.9.0...v0.10.0) (2026-09-13)
 
 
