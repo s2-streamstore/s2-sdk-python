@@ -4,9 +4,12 @@ from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import patch
 
+import pytest
+
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 import s2_sdk._s2s._append_session as append_session
 from s2_sdk._client import HttpClient
+from s2_sdk._exceptions import AppendIndefiniteFailureError, S2ServerError
 from s2_sdk._s2s._protocol import Message
 from s2_sdk._types import AppendInput, Compression, Record, Retry
 
@@ -93,3 +96,63 @@ async def test_inflight_acks_drained_before_reconnect() -> None:
     assert [ack.end.seq_num for ack in acks] == [1, 2]
     assert len(responses) == 2
     assert responses[0].retired
+
+
+@pytest.mark.parametrize(
+    ("first_code", "first_status", "want_wrapped"),
+    [
+        ("unavailable", 503, True),
+        ("rate_limited", 429, False),
+    ],
+)
+async def test_terminal_definite_error_preserves_prior_uncertainty(
+    first_code: str, first_status: int, want_wrapped: bool
+) -> None:
+    errors = [
+        S2ServerError(code=first_code, message=first_code, status_code=first_status),
+        S2ServerError(code="rate_limited", message="rate_limited", status_code=429),
+    ]
+    final = errors[-1]
+
+    class _Client:
+        @asynccontextmanager
+        async def streaming_request(
+            self,
+            *args: Any,
+            content: AsyncGenerator[bytes, None] | None = None,
+            **kwargs: Any,
+        ) -> AsyncGenerator[_Response, None]:
+            assert content is not None
+            try:
+                # Consume one input so it becomes inflight, then fail.
+                await content.__anext__()
+                raise errors.pop(0)
+            finally:
+                await content.aclose()
+            yield _Response(())  # pragma: no cover
+
+    async def inputs() -> AsyncIterator[AppendInput]:
+        yield AppendInput(records=[Record(body=b"a")])
+
+    with (
+        patch.object(append_session, "compute_backoff", new=lambda *a, **k: 0.0),
+        pytest.raises(BaseException) as exc_info,
+    ):
+        async for _ in append_session.run_append_session(
+            cast(HttpClient, _Client()),
+            "stream",
+            inputs(),
+            Retry(max_attempts=2),
+            Compression.NONE,
+            ack_timeout=1.0,
+        ):
+            pass
+
+    err: BaseException = exc_info.value
+    while isinstance(err, BaseExceptionGroup):
+        err = err.exceptions[0]
+    if want_wrapped:
+        assert isinstance(err, AppendIndefiniteFailureError)
+        assert err.final_attempt_error is final
+    else:
+        assert err is final

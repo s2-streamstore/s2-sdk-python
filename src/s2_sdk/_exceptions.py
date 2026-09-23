@@ -69,6 +69,23 @@ class ServerDrainingError(S2ServerError):
     """The server is draining, so the associated connection should be retired."""
 
 
+class AppendIndefiniteFailureError(S2Error):
+    """The final append attempt failed definitively, but an earlier attempt may have
+    taken effect, so the entire append operation is indefinite.
+
+    Attributes:
+        final_attempt_error: The definite error raised by the final attempt.
+    """
+
+    def __init__(self, final_attempt_error: Exception):
+        self.final_attempt_error = final_attempt_error
+        super().__init__(
+            "append may have taken effect in an earlier attempt; "
+            f"final attempt failed: {final_attempt_error}"
+        )
+        self.__cause__ = final_attempt_error
+
+
 class AppendConditionError(S2ServerError):
     """Append condition was not met."""
 

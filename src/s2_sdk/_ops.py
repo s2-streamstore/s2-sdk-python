@@ -976,6 +976,7 @@ class S2Stream:
             max_retries=retry._max_retries(),
             min_base_delay=retry.min_base_delay.total_seconds(),
             max_base_delay=retry.max_base_delay.total_seconds(),
+            track_append_uncertainty=True,
         )
 
     def __repr__(self) -> str:
