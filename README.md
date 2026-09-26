@@ -32,27 +32,6 @@ You can install the package from the [Python Package Index](https://pypi.org/pro
 pip install s2-sdk
 ```
 
-## Storage classes
-
-Use plain strings for storage-class names:
-
-```python
-from s2_sdk import StreamConfig
-
-config = StreamConfig(storage_class="express")
-```
-
-Discover available names and defaults with `await client.list_locations()`.
-Each location exposes `storage_classes` and `default_storage_class`; both may
-be `None` on older servers. See [the discovery example](https://github.com/s2-streamstore/s2-sdk-python/blob/main/examples/locations.py).
-
-Leaving `storage_class` as `None` omits the field: creation inherits the
-location or basin default, and reconfiguration leaves the value unchanged.
-
-The `StorageClass` enum has been removed. Replace `StorageClass.EXPRESS` with
-`"express"`, `StorageClass.STANDARD` with `"standard"`, and type annotations with
-`str`.
-
 ## Get in touch
 
 Join our [Discord](https://discord.gg/vTCs7kMkAf) server. We would love to hear
