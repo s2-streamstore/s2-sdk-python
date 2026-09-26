@@ -26,7 +26,6 @@ from s2_sdk import (
     S2Stream,
     SeqNum,
     SeqNumMismatchError,
-    StorageClass,
     StreamConfig,
     TailOffset,
     Timestamp,
@@ -861,7 +860,7 @@ class TestAutoCreateStreamConfig:
                 create_stream_on_append=True,
                 create_stream_on_read=True,
                 default_stream_config=StreamConfig(
-                    storage_class=StorageClass.STANDARD,
+                    storage_class="standard",
                     retention_policy=7200,
                 ),
             ),
@@ -880,7 +879,7 @@ class TestAutoCreateStreamConfig:
         )
 
         actual = await basin.get_stream_config(stream_name)
-        assert actual.storage_class == StorageClass.STANDARD
+        assert actual.storage_class == "standard"
         assert actual.retention_policy == 3600
         assert actual.timestamping is not None
         assert actual.timestamping.mode == TimestampingMode.CLIENT_PREFER
@@ -899,7 +898,7 @@ class TestAutoCreateStreamConfig:
         await basin.create_stream(
             stream_name,
             config=StreamConfig(
-                storage_class=StorageClass.EXPRESS,
+                storage_class="express",
                 retention_policy=7200,
             ),
         )
@@ -907,13 +906,13 @@ class TestAutoCreateStreamConfig:
             basin.stream(stream_name),
             operation,
             StreamConfig(
-                storage_class=StorageClass.STANDARD,
+                storage_class="standard",
                 retention_policy=3600,
             ),
         )
 
         actual = await basin.get_stream_config(stream_name)
-        assert actual.storage_class == StorageClass.EXPRESS
+        assert actual.storage_class == "express"
         assert actual.retention_policy == 7200
 
 

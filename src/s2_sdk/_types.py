@@ -376,12 +376,11 @@ class LocationInfo:
     is_private: bool
     """Whether this location is an account-private placement."""
 
+    storage_classes: list[str] | None = None
+    """Storage classes available to the account in this location."""
 
-class StorageClass(_DocEnum):
-    """Storage class for recent appends."""
-
-    STANDARD = "standard", "Offers end-to-end latencies under 500 ms."
-    EXPRESS = "express", "Offers end-to-end latencies under 50 ms."
+    default_storage_class: str | None = None
+    """Default storage class for this location."""
 
 
 class TimestampingMode(_DocEnum):
@@ -492,8 +491,8 @@ class Timestamping:
 class StreamConfig:
     """Stream configuration."""
 
-    storage_class: StorageClass | None = None
-    """Storage class for recent appends. Defaults to ``EXPRESS``."""
+    storage_class: str | None = None
+    """Storage class for recent appends. See :meth:`S2.list_locations`."""
 
     retention_policy: int | Literal["infinite"] | None = None
     """Retention duration in seconds, or ``"infinite"``. Default is 7 days."""

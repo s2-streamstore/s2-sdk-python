@@ -97,8 +97,6 @@
 
 .. autoenum:: Encryption
 
-.. autoenum:: StorageClass
-
 .. autoenum:: TimestampingMode
 
 .. autoclass:: Timestamping

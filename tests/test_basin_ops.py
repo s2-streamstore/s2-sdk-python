@@ -3,11 +3,11 @@ import uuid
 import pytest
 
 from s2_sdk import (
+    S2,
     EnsureStatus,
     S2Basin,
     S2ServerError,
     S2Stream,
-    StorageClass,
     StreamConfig,
     Timestamping,
     TimestampingMode,
@@ -34,7 +34,7 @@ class TestBasinOperations:
         basin = shared_basin
 
         config = StreamConfig(
-            storage_class=StorageClass.STANDARD,
+            storage_class="standard",
             retention_policy=86400 * 3,
             timestamping=Timestamping(
                 mode=TimestampingMode.ARRIVAL,
@@ -48,7 +48,7 @@ class TestBasinOperations:
             assert stream_info.name == stream_name
 
             retrieved_config = await basin.get_stream_config(stream_name)
-            assert retrieved_config.storage_class == StorageClass.STANDARD
+            assert retrieved_config.storage_class == "standard"
             assert retrieved_config.retention_policy == 86400 * 3
             assert retrieved_config.timestamping is not None
             assert retrieved_config.timestamping.mode == TimestampingMode.ARRIVAL
@@ -58,17 +58,20 @@ class TestBasinOperations:
         finally:
             await basin.delete_stream(stream_name)
 
-    async def test_default_stream_config(self, shared_basin: S2Basin, stream: S2Stream):
-        basin = shared_basin
-
-        config = await basin.get_stream_config(stream.name)
-        assert config.storage_class == StorageClass.EXPRESS
+    async def test_default_stream_config(
+        self, s2: S2, shared_basin: S2Basin, stream: S2Stream
+    ):
+        config = await shared_basin.get_stream_config(stream.name)
+        basin_config = await s2.get_basin_config(shared_basin.name)
+        defaults = basin_config.default_stream_config
+        if defaults is not None and defaults.storage_class is not None:
+            assert config.storage_class == defaults.storage_class
         assert config.retention_policy == 86400 * 7
 
     async def test_reconfigure_stream(self, shared_basin: S2Basin, stream: S2Stream):
         basin = shared_basin
         config = StreamConfig(
-            storage_class=StorageClass.STANDARD,
+            storage_class="standard",
             retention_policy="infinite",
             timestamping=Timestamping(
                 mode=TimestampingMode.CLIENT_REQUIRE, uncapped=True
@@ -77,7 +80,7 @@ class TestBasinOperations:
         )
 
         updated_config = await basin.reconfigure_stream(stream.name, config=config)
-        assert updated_config.storage_class == StorageClass.STANDARD
+        assert updated_config.storage_class == "standard"
         assert updated_config.retention_policy == "infinite"
         assert updated_config.timestamping is not None
         assert updated_config.timestamping.mode == TimestampingMode.CLIENT_REQUIRE
@@ -85,7 +88,7 @@ class TestBasinOperations:
         assert updated_config.delete_on_empty_min_age == 1800
 
         config = StreamConfig(
-            storage_class=StorageClass.EXPRESS,
+            storage_class="express",
             retention_policy=86400 * 90,
             timestamping=Timestamping(
                 mode=TimestampingMode.CLIENT_PREFER, uncapped=False
@@ -93,7 +96,7 @@ class TestBasinOperations:
             delete_on_empty_min_age=3600,
         )
         updated_config = await basin.reconfigure_stream(stream.name, config=config)
-        assert updated_config.storage_class == StorageClass.EXPRESS
+        assert updated_config.storage_class == "express"
         assert updated_config.retention_policy == 86400 * 90
         assert updated_config.timestamping.mode == TimestampingMode.CLIENT_PREFER
         assert updated_config.timestamping.uncapped is False
@@ -225,12 +228,12 @@ class TestBasinOperations:
     async def test_create_stream_storage_class_express(
         self, shared_basin: S2Basin, stream_name: str
     ):
-        config = StreamConfig(storage_class=StorageClass.EXPRESS)
+        config = StreamConfig(storage_class="express")
         info = await shared_basin.create_stream(name=stream_name, config=config)
         try:
             assert info.name == stream_name
             retrieved = await shared_basin.get_stream_config(stream_name)
-            assert retrieved.storage_class == StorageClass.EXPRESS
+            assert retrieved.storage_class == "express"
         finally:
             await shared_basin.delete_stream(stream_name)
 
@@ -290,9 +293,9 @@ class TestBasinOperations:
         self, shared_basin: S2Basin, stream: S2Stream
     ):
         updated = await shared_basin.reconfigure_stream(
-            stream.name, config=StreamConfig(storage_class=StorageClass.STANDARD)
+            stream.name, config=StreamConfig(storage_class="standard")
         )
-        assert updated.storage_class == StorageClass.STANDARD
+        assert updated.storage_class == "standard"
 
     async def test_reconfigure_stream_retention(
         self, shared_basin: S2Basin, stream: S2Stream
@@ -500,9 +503,9 @@ class TestBasinOperations:
         await shared_basin.create_stream(name=stream_name)
         try:
             updated = await shared_basin.reconfigure_stream(
-                stream_name, config=StreamConfig(storage_class=StorageClass.EXPRESS)
+                stream_name, config=StreamConfig(storage_class="express")
             )
-            assert updated.storage_class == StorageClass.EXPRESS
+            assert updated.storage_class == "express"
         except S2ServerError:
             pass  # Free tier may not support Express
         finally:
@@ -571,7 +574,7 @@ class TestBasinOperations:
         with pytest.raises(S2ServerError):
             await shared_basin.reconfigure_stream(
                 "nonexistent-stream-xyz",
-                config=StreamConfig(storage_class=StorageClass.STANDARD),
+                config=StreamConfig(storage_class="standard"),
             )
 
     async def test_delete_stream_already_deleting_is_idempotent(
