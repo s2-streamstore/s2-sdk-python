@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.12.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.11.0...v0.12.0) (2026-09-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* use string storage classes and expose location offerings ([#139](https://github.com/s2-streamstore/s2-sdk-python/issues/139))
+
+### Features
+
+* use string storage classes and expose location offerings ([#139](https://github.com/s2-streamstore/s2-sdk-python/issues/139)) ([c2ff3f4](https://github.com/s2-streamstore/s2-sdk-python/commit/c2ff3f43b0252220d4a283aaba7dc234faad7a27))
+
+
+### Bug Fixes
+
+* preserve uncertainty across append retries ([#137](https://github.com/s2-streamstore/s2-sdk-python/issues/137)) ([bf927e9](https://github.com/s2-streamstore/s2-sdk-python/commit/bf927e9f3e799f8448b8a3d5017611a3ef1c3b91))
+
 ## [0.11.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.10.0...v0.11.0) (2026-09-17)
 
 
