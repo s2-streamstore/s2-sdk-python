@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from s2_sdk._exceptions import (
+    AppendIndefiniteFailureError,
     ConnectError,
     ConnectionRetiredError,
     S2ServerError,
@@ -29,20 +30,25 @@ class Retrier:
         max_retries: int,
         min_base_delay: float = 0.1,
         max_base_delay: float = 1.0,
+        track_append_uncertainty: bool = False,
     ):
         self.should_retry_on = should_retry_on
         self.max_retries = max_retries
         self.min_base_delay = min_base_delay
         self.max_base_delay = max_base_delay
+        self.track_append_uncertainty = track_append_uncertainty
 
     async def __call__(self, f: Callable, *args, **kwargs):
         max_retries = self.max_retries
         attempt = 0
+        prior_uncertainty = False
         while True:
             try:
                 return await f(*args, **kwargs)
             except Exception as e:
                 if attempt < max_retries and self.should_retry_on(e):
+                    if self.track_append_uncertainty and not has_no_side_effects(e):
+                        prior_uncertainty = True
                     delay = compute_backoff(
                         attempt,
                         min_base_delay=self.min_base_delay,
@@ -66,6 +72,10 @@ class Retrier:
                         self.should_retry_on(e),
                         attempt >= max_retries,
                     )
+                    if self.track_append_uncertainty:
+                        wrapped = with_prior_uncertainty(e, prior_uncertainty)
+                        if wrapped is not e:
+                            raise wrapped from e
                     raise e
 
 
@@ -160,6 +170,8 @@ def http_retry_on(e: Exception) -> bool:
 
 
 def has_no_side_effects(e: Exception) -> bool:
+    if isinstance(e, AppendIndefiniteFailureError):
+        return False
     if requires_reconnect(e):
         return True
     if isinstance(e, S2ServerError):
@@ -174,3 +186,25 @@ def has_no_side_effects(e: Exception) -> bool:
             cause = cause.__cause__
         return False
     return False
+
+
+def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:
+    """Wrap a definite final error if an earlier attempt may have taken effect.
+
+    Already indefinite errors are returned unchanged.
+    """
+    if prior_uncertainty and has_no_side_effects(e):
+        return AppendIndefiniteFailureError(e)
+    return e
+
+
+def attempt_may_have_side_effects(
+    e: Exception, frame_signal: FrameSignal | None
+) -> bool:
+    """Whether this attempt may have taken effect, accounting for unsent request data.
+
+    Without a frame signal, assume the request may have been sent.
+    """
+    return not has_no_side_effects(e) and (
+        frame_signal is None or frame_signal.is_signalled()
+    )

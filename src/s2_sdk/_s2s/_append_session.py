@@ -19,9 +19,11 @@ from s2_sdk._mappers import (
 from s2_sdk._retrier import (
     AdvisedReconnectLimiter,
     Attempt,
+    attempt_may_have_side_effects,
     compute_backoff,
     is_safe_to_retry_session,
     requires_reconnect,
+    with_prior_uncertainty,
 )
 from s2_sdk._s2s import _stream_records_path
 from s2_sdk._s2s._protocol import (
@@ -52,6 +54,9 @@ class _InflightInput:
     num_records: int
     encoded: bytes
     ack_deadline: float | None = None
+    # Set once an attempt carrying this input failed in a way that may have
+    # taken effect and was retried.
+    prior_uncertainty: bool = False
 
 
 @dataclass(slots=True)
@@ -146,6 +151,9 @@ async def run_append_session(
                     bool(session_state.inflight_inputs),
                     frame_signal,
                 ):
+                    if attempt_may_have_side_effects(e, frame_signal):
+                        for inflight in session_state.inflight_inputs:
+                            inflight.prior_uncertainty = True
                     backoff = compute_backoff(
                         attempt.value,
                         min_base_delay=min_base_delay,
@@ -165,7 +173,16 @@ async def run_append_session(
                         e,
                         attempt.value >= max_retries,
                     )
-                    raise
+                    wrapped = with_prior_uncertainty(
+                        e,
+                        any(
+                            inflight.prior_uncertainty
+                            for inflight in session_state.inflight_inputs
+                        ),
+                    )
+                    if wrapped is e:
+                        raise
+                    raise wrapped from e
         await ack_queue.put(None)
 
     async with asyncio.TaskGroup() as tg:
