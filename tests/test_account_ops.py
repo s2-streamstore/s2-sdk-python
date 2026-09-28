@@ -14,7 +14,6 @@ from s2_sdk import (
     PrefixMatch,
     S2Basin,
     S2ServerError,
-    StorageClass,
     StreamConfig,
     Timestamping,
     TimestampingMode,
@@ -36,7 +35,7 @@ class TestAccountOperations:
     async def test_create_basin_with_config(self, s2: S2, basin_name: str):
         config = BasinConfig(
             default_stream_config=StreamConfig(
-                storage_class=StorageClass.STANDARD,
+                storage_class="standard",
                 retention_policy=86400 * 7,
                 timestamping=Timestamping(
                     mode=TimestampingMode.CLIENT_REQUIRE,
@@ -54,10 +53,7 @@ class TestAccountOperations:
 
             retrieved_config = await s2.get_basin_config(basin_name)
             assert retrieved_config.default_stream_config is not None
-            assert (
-                retrieved_config.default_stream_config.storage_class
-                == StorageClass.STANDARD
-            )
+            assert retrieved_config.default_stream_config.storage_class == "standard"
             assert retrieved_config.default_stream_config.retention_policy == 86400 * 7
             assert (
                 retrieved_config.default_stream_config.timestamping.mode
@@ -129,7 +125,7 @@ class TestAccountOperations:
     async def test_reconfigure_basin(self, s2: S2, basin: S2Basin):
         config = BasinConfig(
             default_stream_config=StreamConfig(
-                storage_class=StorageClass.STANDARD,
+                storage_class="standard",
                 retention_policy=3600,
             ),
             create_stream_on_append=True,
@@ -138,9 +134,7 @@ class TestAccountOperations:
         updated_config = await s2.reconfigure_basin(basin.name, config=config)
 
         assert updated_config.default_stream_config is not None
-        assert (
-            updated_config.default_stream_config.storage_class == StorageClass.STANDARD
-        )
+        assert updated_config.default_stream_config.storage_class == "standard"
         assert updated_config.default_stream_config.retention_policy == 3600
         assert updated_config.create_stream_on_append is True
 

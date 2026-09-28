@@ -31,7 +31,6 @@ from s2_sdk._types import (
     Scalar,
     SeqNum,
     SequencedRecord,
-    StorageClass,
     StreamConfig,
     StreamInfo,
     StreamPosition,
@@ -88,6 +87,8 @@ def location_info_from_json(data: dict[str, Any]) -> LocationInfo:
     return LocationInfo(
         name=data["name"],
         is_private=data["is_private"],
+        storage_classes=data.get("storage_classes"),
+        default_storage_class=data.get("default_storage_class"),
     )
 
 
@@ -96,7 +97,7 @@ def stream_config_to_json(config: StreamConfig | None) -> dict[str, Any] | None:
         return None
     result: dict[str, Any] = {}
     if config.storage_class is not None:
-        result["storage_class"] = config.storage_class.value
+        result["storage_class"] = config.storage_class
     if config.retention_policy is not None:
         result["retention_policy"] = _retention_policy_to_json(config.retention_policy)
     if config.timestamping is not None:
@@ -137,9 +138,8 @@ def stream_config_from_json(data: dict[str, Any]) -> StreamConfig:
     doe = data.get("delete_on_empty")
     delete_on_empty_min_age = doe.get("min_age_secs") if doe else None
 
-    sc = data.get("storage_class")
     return StreamConfig(
-        storage_class=StorageClass(sc) if sc else None,
+        storage_class=data.get("storage_class"),
         retention_policy=retention_policy,
         timestamping=timestamping,
         delete_on_empty_min_age=delete_on_empty_min_age,
