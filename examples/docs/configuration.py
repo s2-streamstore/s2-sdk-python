@@ -25,6 +25,13 @@ async def main():
     # ANCHOR_END: custom-endpoints
     await client.close()
 
+    if os.getenv("S2_ACCOUNT_ENDPOINT") and os.getenv("S2_BASIN_ENDPOINT"):
+        # ANCHOR: env-endpoints
+        # Reads S2_ACCOUNT_ENDPOINT and S2_BASIN_ENDPOINT.
+        client = S2(os.environ["S2_ACCESS_TOKEN"], endpoints=Endpoints.from_env())
+        # ANCHOR_END: env-endpoints
+        await client.close()
+
     access_token = os.environ["S2_ACCESS_TOKEN"]
 
     # ANCHOR: retry-config
