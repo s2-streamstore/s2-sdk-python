@@ -1,4 +1,5 @@
 import base64
+import os
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -68,8 +69,9 @@ class S2:
 
     Args:
         access_token: Access token for authenticating with S2.
-        endpoints: S2 endpoints. If ``None``, defaults to public cloud
-            endpoints. See :class:`Endpoints`.
+        endpoints: S2 endpoints. If ``None``, uses :meth:`Endpoints.from_env`
+            when ``S2_ACCOUNT_ENDPOINT`` or ``S2_BASIN_ENDPOINT`` is set, and
+            public cloud endpoints otherwise. See :class:`Endpoints`.
         timeout: Timeout configuration. If ``None``, default values are
             used. See :class:`Timeout`.
         retry: Retry configuration. If ``None``, default values are
@@ -110,7 +112,10 @@ class S2:
         compression: Compression = Compression.NONE,
     ) -> None:
         if endpoints is None:
-            endpoints = Endpoints.default()
+            if os.getenv("S2_ACCOUNT_ENDPOINT") or os.getenv("S2_BASIN_ENDPOINT"):
+                endpoints = Endpoints.from_env()
+            else:
+                endpoints = Endpoints.default()
         if timeout is None:
             timeout = Timeout()
         if retry is None:

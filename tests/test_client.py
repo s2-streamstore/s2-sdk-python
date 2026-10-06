@@ -677,3 +677,18 @@ def test_origin_invalid_port_is_client_error():
 
     with pytest.raises(S2ClientError, match="Invalid endpoint URL"):
         _origin("https://example.com:99999")
+
+
+def test_s2_endpoints_default_to_env(monkeypatch):
+    from s2_sdk import S2
+
+    monkeypatch.setenv("S2_ACCOUNT_ENDPOINT", "http://localhost:8080")
+    monkeypatch.setenv("S2_BASIN_ENDPOINT", "http://localhost:8080")
+    assert S2("token")._endpoints._account_url() == "http://localhost:8080"
+
+    monkeypatch.delenv("S2_BASIN_ENDPOINT")
+    with pytest.raises(S2ClientError):
+        S2("token")
+
+    monkeypatch.delenv("S2_ACCOUNT_ENDPOINT")
+    assert S2("token")._endpoints._account_url() == "https://a.s2.dev"
