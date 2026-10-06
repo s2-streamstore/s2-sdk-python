@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.12.0...v0.12.1) (2026-10-06)
+
+
+### Documentation
+
+* add env-endpoints example snippet ([#147](https://github.com/s2-streamstore/s2-sdk-python/issues/147)) ([745c1de](https://github.com/s2-streamstore/s2-sdk-python/commit/745c1de4384f8709489b766453bde2ec692923c3))
+
 ## [0.12.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.11.0...v0.12.0) (2026-09-28)
 
 
