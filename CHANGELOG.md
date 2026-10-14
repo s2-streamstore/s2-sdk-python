@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.13.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.12.0...v0.13.0) (2026-10-14)
+
+
+### Features
+
+* support estimated billable usage metrics ([#149](https://github.com/s2-streamstore/s2-sdk-python/issues/149)) ([677e241](https://github.com/s2-streamstore/s2-sdk-python/commit/677e241790a457f9f48b16b7e9385185443b1441))
+
+
+### Documentation
+
+* add env-endpoints example snippet ([#147](https://github.com/s2-streamstore/s2-sdk-python/issues/147)) ([745c1de](https://github.com/s2-streamstore/s2-sdk-python/commit/745c1de4384f8709489b766453bde2ec692923c3))
+
 ## [0.12.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.11.0...v0.12.0) (2026-09-28)
 
 
