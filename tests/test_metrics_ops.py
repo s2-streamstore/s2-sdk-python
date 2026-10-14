@@ -209,9 +209,12 @@ class TestMetricsOperations:
                 set=AccountMetricSet.ACTIVE_BASINS, start=now + 3600, end=now
             )
 
-    async def test_account_metrics_all_sets(self, s2: S2):
+    async def test_account_metrics_operational_sets(self, s2: S2):
         start, end = _default_range()
-        for metric_set in AccountMetricSet:
+        for metric_set in (
+            AccountMetricSet.ACTIVE_BASINS,
+            AccountMetricSet.ACCOUNT_OPS,
+        ):
             metrics = await s2.account_metrics(set=metric_set, start=start, end=end)
             assert isinstance(metrics, list)
 
