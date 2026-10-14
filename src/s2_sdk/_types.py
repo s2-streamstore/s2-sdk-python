@@ -442,6 +442,7 @@ class MetricUnit(_DocEnum):
 
     BYTES = "bytes"
     OPERATIONS = "operations"
+    USD = "usd"
 
 
 class TimeseriesInterval(_DocEnum):
@@ -457,6 +458,7 @@ class AccountMetricSet(_DocEnum):
 
     ACTIVE_BASINS = "active-basins"
     ACCOUNT_OPS = "account-ops"
+    ESTIMATED_BILLABLE_USAGE = "estimated-billable-usage"
 
 
 class BasinMetricSet(_DocEnum):
