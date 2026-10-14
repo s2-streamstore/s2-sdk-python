@@ -1,4 +1,6 @@
+import json
 import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -9,6 +11,7 @@ from s2_sdk import (
     BasinMetricSet,
     Gauge,
     Label,
+    MetricUnit,
     S2Basin,
     S2ServerError,
     S2Stream,
@@ -16,6 +19,57 @@ from s2_sdk import (
     StreamMetricSet,
     TimeseriesInterval,
 )
+from s2_sdk._client import HttpClient, Response
+
+
+@pytest.mark.parametrize(
+    "interval", [None, TimeseriesInterval.HOUR, TimeseriesInterval.DAY]
+)
+async def test_account_metrics_estimated_billable_usage(
+    interval: TimeseriesInterval | None,
+):
+    start, end = 1_700_000_000, 1_700_003_600
+    response_interval = interval or TimeseriesInterval.HOUR
+    response = {
+        "values": [
+            {
+                "accumulation": {
+                    "name": name,
+                    "unit": "usd",
+                    "interval": response_interval.value,
+                    "values": [[start, 0.012345]],
+                }
+            }
+            for name in ["transfer.writes_standard", "total"]
+        ]
+    }
+    request = AsyncMock(return_value=Response(200, json.dumps(response).encode()))
+    with patch.object(HttpClient, "unary_request", request):
+        async with S2("token") as s2:
+            metrics = await s2.account_metrics(
+                set=AccountMetricSet.ESTIMATED_BILLABLE_USAGE,
+                start=start,
+                end=end,
+                interval=interval,
+            )
+
+    params: dict[str, str | int] = {
+        "set": "estimated-billable-usage",
+        "start": start,
+        "end": end,
+    }
+    if interval is not None:
+        params["interval"] = interval.value
+    request.assert_awaited_once_with("GET", "/v1/metrics", params=params)
+    assert metrics == [
+        Accumulation(
+            name=name,
+            unit=MetricUnit.USD,
+            interval=response_interval,
+            values=[(start, 0.012345)],
+        )
+        for name in ["transfer.writes_standard", "total"]
+    ]
 
 
 def _default_range() -> tuple[int, int]:

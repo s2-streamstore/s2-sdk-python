@@ -571,6 +571,10 @@ class S2:
     ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
         """Get account metrics.
 
+        ``estimated-billable-usage`` returns estimated USD by billing dimension
+        and as a ``total`` series. Supports hour (default) and day intervals,
+        aggregating finalized hours. Daily points may be partial.
+
         Args:
             set: Metric set to query.
             start: Start of the time range (epoch seconds).
