@@ -34,6 +34,20 @@ class _DocEnum(Enum):
         return f"{type(self).__name__}.{self.name}"
 
 
+class _OpenEnum(_DocEnum):
+    # Values returned by the service can gain new members. An unrecognized one is
+    # kept as a member whose name and value are the wire string, so a newer
+    # service does not fail parsing and the value can be sent back unchanged.
+    @classmethod
+    def _missing_(cls, value):
+        if not isinstance(value, str):
+            return None
+        member = object.__new__(cls)
+        member._name_ = value
+        member._value_ = value
+        return cls._value2member_map_.setdefault(value, member)
+
+
 class Compression(_DocEnum):
     """Compression algorithm for requests and responses."""
 
@@ -52,7 +66,7 @@ class AppendRetryPolicy(_DocEnum):
     )
 
 
-class Encryption(_DocEnum):
+class Encryption(_OpenEnum):
     """Encryption algorithm."""
 
     AEGIS_256 = "aegis-256", "AEGIS-256."
@@ -383,7 +397,7 @@ class LocationInfo:
     """Default storage class for this location."""
 
 
-class TimestampingMode(_DocEnum):
+class TimestampingMode(_OpenEnum):
     """Timestamping mode for appends. Timestamps are milliseconds since Unix epoch."""
 
     CLIENT_PREFER = (
@@ -400,7 +414,7 @@ class TimestampingMode(_DocEnum):
     )
 
 
-class Operation(_DocEnum):
+class Operation(_OpenEnum):
     """Granular operation for access token scoping."""
 
     LIST_BASINS = "list-basins"
@@ -437,7 +451,7 @@ class Permission(_DocEnum):
     READ_WRITE = "read-write"
 
 
-class MetricUnit(_DocEnum):
+class MetricUnit(_OpenEnum):
     """Unit of a metric value."""
 
     BYTES = "bytes"
@@ -445,7 +459,7 @@ class MetricUnit(_DocEnum):
     USD = "usd"
 
 
-class TimeseriesInterval(_DocEnum):
+class TimeseriesInterval(_OpenEnum):
     """Bucket interval for timeseries metrics."""
 
     MINUTE = "minute"
