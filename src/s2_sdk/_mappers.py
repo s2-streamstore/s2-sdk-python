@@ -152,10 +152,13 @@ def _retention_policy_to_json(rp: int | Literal["infinite"]) -> dict[str, Any]:
     return {"age": rp}
 
 
-def _retention_policy_from_json(data: dict[str, Any]) -> int | Literal["infinite"]:
+def _retention_policy_from_json(
+    data: dict[str, Any],
+) -> int | Literal["infinite"] | None:
     if "infinite" in data:
         return "infinite"
-    return data["age"]
+    # None for a policy kind this version does not know.
+    return data.get("age")
 
 
 def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
@@ -170,22 +173,24 @@ def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
     )
 
 
-def _ensure_status_from_headers(headers: Iterable[tuple[str, str]]) -> EnsureStatus:
+def _ensure_status(
+    status_code: int, headers: Iterable[tuple[str, str]]
+) -> EnsureStatus:
     for k, v in headers:
         if k == _S2_PROVISION_RESULT_HEADER:
             status = _ENSURE_STATUS_FROM_PROVISION_RESULT.get(v)
-            if status is None:
-                raise ValueError(f"unrecognized s2-provision-result header: {v!r}")
-            return status
-    raise ValueError("missing s2-provision-result header")
+            if status is not None:
+                return status
+    # Missing or unrecognized header: fall back to the response status.
+    return EnsureStatus.CREATED if status_code == 201 else EnsureStatus.CONFIG_UPDATED
 
 
 def ensured_basin_info_from_json_and_headers(
-    data: dict[str, Any], headers: Iterable[tuple[str, str]]
+    data: dict[str, Any], status_code: int, headers: Iterable[tuple[str, str]]
 ) -> EnsuredBasinInfo:
     return EnsuredBasinInfo(
         basin=basin_info_from_json(data),
-        status=_ensure_status_from_headers(headers),
+        status=_ensure_status(status_code, headers),
     )
 
 
@@ -203,11 +208,11 @@ def stream_info_from_json(data: dict[str, Any]) -> StreamInfo:
 
 
 def ensured_stream_info_from_json_and_headers(
-    data: dict[str, Any], headers: Iterable[tuple[str, str]]
+    data: dict[str, Any], status_code: int, headers: Iterable[tuple[str, str]]
 ) -> EnsuredStreamInfo:
     return EnsuredStreamInfo(
         stream=stream_info_from_json(data),
-        status=_ensure_status_from_headers(headers),
+        status=_ensure_status(status_code, headers),
     )
 
 

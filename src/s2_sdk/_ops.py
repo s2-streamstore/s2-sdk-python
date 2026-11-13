@@ -255,7 +255,7 @@ class S2:
             self._account_client.unary_request, "PUT", f"/v1/basins/{name}", json=json
         )
         return ensured_basin_info_from_json_and_headers(
-            response.json(), response.headers
+            response.json(), response.status_code, response.headers
         )
 
     @fallible
@@ -772,7 +772,7 @@ class S2Basin:
             self._client.unary_request, "PUT", _stream_path(name), json=json
         )
         return ensured_stream_info_from_json_and_headers(
-            response.json(), response.headers
+            response.json(), response.status_code, response.headers
         )
 
     @fallible
