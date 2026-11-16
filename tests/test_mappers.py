@@ -13,8 +13,10 @@ def test_unknown_values_survive_parsing():
             },
         }
     )
-    assert info.scope.basins == Unknown("some-future-match")
+    assert isinstance(info.scope.basins, Unknown)
+    assert info.scope.basins.kind == "some-future-match"
     assert info.scope.ops[0] is Operation.READ
-    # An unknown operation is sent back by name; the service decides.
+    # Unknown values are sent back as received; the service decides.
     body = access_token_info_to_json(info.id, info.scope, False, None)
+    assert body["scope"]["basins"] == {"some-future-match": "x"}
     assert body["scope"]["ops"] == ["read", "some-future-op"]

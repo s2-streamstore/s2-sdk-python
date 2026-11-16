@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Generic, Iterable, Literal, TypeVar
+from typing import Any, Generic, Iterable, Literal, TypeVar
 
 from s2_sdk._exceptions import S2ClientError, fallible
 
@@ -52,11 +52,14 @@ class _OpenEnum(_DocEnum):
 class Unknown:
     """A kind of value returned by the service that this SDK version does not recognize.
 
-    Only the kind is kept, so it cannot be sent back to the service.
+    It can be sent back to the service unchanged.
     """
 
     kind: str
     """Name of the kind, as returned by the service."""
+
+    raw: Any = field(repr=False)
+    """The value as returned by the service."""
 
 
 class Compression(_DocEnum):
