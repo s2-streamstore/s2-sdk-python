@@ -1,10 +1,13 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import h2.errors
+import h2.events
 import pytest
 
 from s2_sdk._client import (
     IDLE_TIMEOUT,
+    Connection,
     ConnectionPool,
     HttpClient,
     Response,
@@ -15,9 +18,12 @@ from s2_sdk._client import (
 from s2_sdk._exceptions import (
     ConnectError,
     ConnectionClosedError,
+    ConnectionRetiredError,
+    ProtocolError,
     ReadTimeoutError,
     S2ClientError,
     S2ServerError,
+    UnprocessedRequestError,
 )
 from s2_sdk._types import Compression
 
@@ -677,3 +683,111 @@ def test_origin_invalid_port_is_client_error():
 
     with pytest.raises(S2ClientError, match="Invalid endpoint URL"):
         _origin("https://example.com:99999")
+
+
+def _connection() -> Connection:
+    return Connection(host="localhost", port=443, ssl_context=None, connect_timeout=5.0)
+
+
+@pytest.mark.asyncio
+async def test_connect_preface_flush_failure_is_connect_error():
+    conn = _connection()
+    with (
+        patch(
+            "s2_sdk._client.asyncio.open_connection",
+            new=AsyncMock(return_value=(MagicMock(), MagicMock())),
+        ),
+        patch.object(
+            Connection,
+            "_flush",
+            new=AsyncMock(side_effect=ConnectionClosedError("Broken pipe")),
+        ),
+        pytest.raises(ConnectError),
+    ):
+        await conn.connect()
+
+
+@pytest.mark.asyncio
+async def test_send_headers_after_reserved_stream_failed_is_unprocessed():
+    conn = _connection()
+    conn._h2 = MagicMock()
+    state = conn.reserve_stream()
+    cause = ConnectionClosedError("Connection closed by remote")
+    conn._fail_stream(state, cause)
+
+    with pytest.raises(UnprocessedRequestError) as exc_info:
+        await conn.send_headers(state, [(":method", "POST")])
+
+    assert exc_info.value.__cause__ is cause
+    conn._h2.send_headers.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_headers_after_retire_keeps_retired_error():
+    conn = _connection()
+    conn._h2 = MagicMock()
+    state = conn.reserve_stream()
+    conn.retire()
+
+    with pytest.raises(ConnectionRetiredError):
+        await conn.send_headers(state, [(":method", "POST")])
+
+
+@pytest.mark.asyncio
+async def test_goaway_fails_unprocessed_streams_as_unprocessed():
+    conn = _connection()
+    processed = _StreamState()
+    unprocessed = _StreamState()
+    conn._streams[1] = processed
+    conn._streams[3] = unprocessed
+    pending = conn.reserve_stream()
+
+    event = h2.events.ConnectionTerminated()
+    event.error_code = h2.errors.ErrorCodes.NO_ERROR
+    event.last_stream_id = 1
+    conn._handle_event(event)
+
+    assert processed.error is None
+    assert isinstance(unprocessed.error, UnprocessedRequestError)
+    assert isinstance(pending.error, UnprocessedRequestError)
+
+
+@pytest.mark.parametrize(
+    ("error_code", "error_type"),
+    [
+        (h2.errors.ErrorCodes.REFUSED_STREAM, UnprocessedRequestError),
+        (h2.errors.ErrorCodes.CANCEL, ProtocolError),
+    ],
+)
+@pytest.mark.asyncio
+async def test_stream_reset_refused_stream_is_unprocessed(
+    error_code: h2.errors.ErrorCodes, error_type: type[Exception]
+):
+    conn = _connection()
+    state = _StreamState()
+    conn._streams[1] = state
+
+    conn._handle_event(h2.events.StreamReset(stream_id=1, error_code=error_code))
+
+    assert type(state.error) is error_type
+
+
+@pytest.mark.asyncio
+async def test_send_data_signals_write_before_flush():
+    conn = _connection()
+    conn._h2 = MagicMock()
+    conn._h2.local_flow_control_window.return_value = 65535
+    conn._h2.max_outbound_frame_size = 16384
+    on_write = MagicMock()
+
+    with (
+        patch.object(
+            Connection,
+            "_flush",
+            new=AsyncMock(side_effect=ConnectionClosedError("Broken pipe")),
+        ),
+        pytest.raises(ConnectionClosedError),
+    ):
+        await conn.send_data(1, b"record", on_write=on_write)
+
+    on_write.assert_called_once()

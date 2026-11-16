@@ -189,7 +189,11 @@ class TransportError(Exception):
     """Network-level error (connection reset, timeout, protocol)."""
 
 
-class ConnectError(TransportError):
+class UnprocessedRequestError(TransportError):
+    """The server did not process the request, so it had no side effects."""
+
+
+class ConnectError(UnprocessedRequestError):
     """Could not get a connection ready for a request. No request bytes were sent."""
 
 
@@ -201,7 +205,7 @@ class ConnectionClosedError(TransportError):
     """Connection closed unexpectedly."""
 
 
-class ConnectionRetiredError(TransportError):
+class ConnectionRetiredError(UnprocessedRequestError):
     """A retired connection cannot accept a new stream."""
 
 

@@ -8,11 +8,11 @@ from typing import Callable
 
 from s2_sdk._exceptions import (
     AppendIndefiniteFailureError,
-    ConnectError,
     ConnectionRetiredError,
     S2ServerError,
     ServerDrainingError,
     TransportError,
+    UnprocessedRequestError,
 )
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
@@ -47,7 +47,7 @@ class Retrier:
                 return await f(*args, **kwargs)
             except Exception as e:
                 if attempt < max_retries and self.should_retry_on(e):
-                    if self.track_append_uncertainty and not has_no_side_effects(e):
+                    if self.track_append_uncertainty and not is_definite_failure(e):
                         prior_uncertainty = True
                     delay = compute_backoff(
                         attempt,
@@ -172,7 +172,7 @@ def http_retry_on(e: Exception) -> bool:
 def has_no_side_effects(e: Exception) -> bool:
     if isinstance(e, AppendIndefiniteFailureError):
         return False
-    if requires_reconnect(e) or isinstance(e, ConnectError):
+    if requires_reconnect(e) or isinstance(e, UnprocessedRequestError):
         return True
     if isinstance(e, S2ServerError):
         return (e.status_code == 429 and e.code == "rate_limited") or (
@@ -206,6 +206,6 @@ def attempt_may_have_side_effects(
 
     Without a frame signal, assume the request may have been sent.
     """
-    return not has_no_side_effects(e) and (
+    return not is_definite_failure(e) and (
         frame_signal is None or frame_signal.is_signalled()
     )

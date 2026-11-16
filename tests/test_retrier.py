@@ -9,7 +9,7 @@ from s2_sdk import (
     S2ClientError,
     S2ServerError,
 )
-from s2_sdk._exceptions import ConnectError
+from s2_sdk._exceptions import ConnectError, UnprocessedRequestError
 from s2_sdk._retrier import (
     Retrier,
     compute_backoff,
@@ -82,6 +82,11 @@ class TestHasNoSideEffects:
         assert has_no_side_effects(e)
         assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
 
+    def test_unprocessed_request(self):
+        e = UnprocessedRequestError("GOAWAY received")
+        assert has_no_side_effects(e)
+        assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
+
 
 class TestRetrierAppendUncertainty:
     def _retrier(self) -> Retrier:
@@ -116,10 +121,17 @@ class TestRetrierAppendUncertainty:
             await self._run([ConnectError("timed out"), final, final])
         assert exc_info.value is final
 
-    async def test_definite_then_definite_is_not_wrapped(self):
+    @pytest.mark.parametrize(
+        "first",
+        [
+            server_error(429, "rate_limited"),
+            server_error(409, "transaction_conflict"),
+        ],
+    )
+    async def test_definite_then_definite_is_not_wrapped(self, first: S2ServerError):
         final = server_error(429, "rate_limited")
         with pytest.raises(S2ServerError) as exc_info:
-            await self._run([server_error(429, "rate_limited"), final, final])
+            await self._run([first, final, final])
         assert exc_info.value is final
 
     async def test_indefinite_then_indefinite_is_not_wrapped(self):
