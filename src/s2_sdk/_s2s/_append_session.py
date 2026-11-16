@@ -182,7 +182,7 @@ async def run_append_session(
                     )
                     if wrapped is e:
                         raise
-                    raise wrapped from e
+                    raise wrapped
         await ack_queue.put(None)
 
     async with asyncio.TaskGroup() as tg:

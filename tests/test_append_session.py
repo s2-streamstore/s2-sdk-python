@@ -13,6 +13,7 @@ from s2_sdk._client import HttpClient
 from s2_sdk._exceptions import ConnectError
 from s2_sdk._s2s._protocol import Message
 from s2_sdk._types import AppendInput, Compression, Record, Retry
+from tests.conftest import server_error
 
 
 @dataclass(slots=True)
@@ -99,25 +100,21 @@ async def test_inflight_acks_drained_before_reconnect() -> None:
     assert responses[0].retired
 
 
-def _server_error(status_code: int, code: str) -> S2ServerError:
-    return S2ServerError(code=code, message=code, status_code=status_code)
-
-
 @pytest.mark.parametrize(
     ("first", "final", "want_wrapped"),
     [
         (
-            _server_error(503, "unavailable"),
-            _server_error(429, "rate_limited"),
+            server_error(503, "unavailable"),
+            server_error(429, "rate_limited"),
             True,
         ),
         (
-            _server_error(429, "rate_limited"),
-            _server_error(429, "rate_limited"),
+            server_error(429, "rate_limited"),
+            server_error(429, "rate_limited"),
             False,
         ),
         (
-            _server_error(503, "unavailable"),
+            server_error(503, "unavailable"),
             SeqNumMismatchError(
                 "seq_num_mismatch", "seq num mismatch", 412, expected_seq_num=1
             ),
@@ -125,7 +122,7 @@ def _server_error(status_code: int, code: str) -> S2ServerError:
         ),
         (
             ConnectError("Connection to host:443 timed out"),
-            _server_error(429, "rate_limited"),
+            server_error(429, "rate_limited"),
             False,
         ),
     ],

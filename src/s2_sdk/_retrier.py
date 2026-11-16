@@ -13,7 +13,6 @@ from s2_sdk._exceptions import (
     S2ServerError,
     ServerDrainingError,
     TransportError,
-    normalize_exception,
 )
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
@@ -76,7 +75,7 @@ class Retrier:
                     if self.track_append_uncertainty:
                         wrapped = with_prior_uncertainty(e, prior_uncertainty)
                         if wrapped is not e:
-                            raise wrapped from e
+                            raise wrapped
                     raise e
 
 
@@ -183,9 +182,7 @@ def has_no_side_effects(e: Exception) -> bool:
 
 
 def is_definite_failure(e: Exception) -> bool:
-    if has_no_side_effects(e):
-        return True
-    return (
+    return has_no_side_effects(e) or (
         isinstance(e, S2ServerError)
         and 400 <= e.status_code < 500
         and e.status_code != 408
@@ -198,7 +195,7 @@ def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:
     Already indefinite errors are returned unchanged.
     """
     if prior_uncertainty and is_definite_failure(e):
-        return AppendIndefiniteFailureError(normalize_exception(e))
+        return AppendIndefiniteFailureError(e)
     return e
 
 

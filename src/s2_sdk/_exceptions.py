@@ -78,12 +78,12 @@ class AppendIndefiniteFailureError(S2Error):
     """
 
     def __init__(self, final_attempt_error: Exception):
-        self.final_attempt_error = final_attempt_error
+        self.final_attempt_error = normalize_exception(final_attempt_error)
         super().__init__(
             "append may have taken effect in an earlier attempt; "
             f"final attempt failed: {final_attempt_error}"
         )
-        self.__cause__ = final_attempt_error
+        self.__cause__ = self.final_attempt_error
 
 
 class AppendConditionError(S2ServerError):
@@ -220,7 +220,7 @@ def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
 
 
 @overload
-def normalize_exception(e: Exception) -> Exception: ...
+def normalize_exception(e: Exception) -> S2Error: ...
 @overload
 def normalize_exception(e: BaseException) -> BaseException: ...
 def normalize_exception(e: BaseException) -> BaseException:
