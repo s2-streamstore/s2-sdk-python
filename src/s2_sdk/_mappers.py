@@ -149,11 +149,11 @@ def stream_config_from_json(data: dict[str, Any]) -> StreamConfig:
 
 def _retention_policy_to_json(
     rp: int | Literal["infinite"] | Unknown,
-) -> Any:
+) -> dict[str, Any] | str:
     if rp == "infinite":
         return {"infinite": {}}
     if isinstance(rp, Unknown):
-        return rp.raw
+        return rp.kind
     return {"age": rp}
 
 
@@ -170,7 +170,7 @@ def _retention_policy_from_json(
 def _unknown_kind(data: dict[str, Any]) -> Unknown | None:
     # A kind this SDK version does not know arrives as an object keyed by its name.
     kind = next(iter(data), None)
-    return Unknown(kind, data) if kind is not None else None
+    return Unknown(kind) if kind is not None else None
 
 
 def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
@@ -230,11 +230,11 @@ def ensured_stream_info_from_json_and_headers(
 
 def _resource_set_to_json(
     rs: ExactMatch | PrefixMatch | Unknown | None,
-) -> Any:
+) -> dict[str, str] | str | None:
     if rs is None:
         return None
     if isinstance(rs, Unknown):
-        return rs.raw
+        return rs.kind
     if isinstance(rs, ExactMatch):
         return {"exact": rs.value}
     return {"prefix": rs.value}
