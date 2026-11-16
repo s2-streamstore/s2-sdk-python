@@ -48,6 +48,17 @@ class _OpenEnum(_DocEnum):
         return cls._value2member_map_.setdefault(value, member)
 
 
+@dataclass(slots=True)
+class Unknown:
+    """A kind of value returned by the service that this SDK version does not recognize.
+
+    Only the kind is kept, so it cannot be sent back to the service.
+    """
+
+    kind: str
+    """Name of the kind, as returned by the service."""
+
+
 class Compression(_DocEnum):
     """Compression algorithm for requests and responses."""
 
@@ -510,7 +521,7 @@ class StreamConfig:
     storage_class: str | None = None
     """Storage class for recent appends. See :meth:`S2.list_locations`."""
 
-    retention_policy: int | Literal["infinite"] | None = None
+    retention_policy: int | Literal["infinite"] | Unknown | None = None
     """Retention duration in seconds, or ``"infinite"``. Default is 7 days."""
 
     timestamping: Timestamping | None = None
@@ -643,13 +654,13 @@ class OperationGroupPermissions:
 class AccessTokenScope:
     """Scope of an access token."""
 
-    basins: ExactMatch | PrefixMatch | None = None
+    basins: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted basins."""
 
-    streams: ExactMatch | PrefixMatch | None = None
+    streams: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted streams."""
 
-    access_tokens: ExactMatch | PrefixMatch | None = None
+    access_tokens: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted access tokens."""
 
     op_groups: OperationGroupPermissions | None = None

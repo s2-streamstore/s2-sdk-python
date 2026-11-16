@@ -568,7 +568,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get account metrics.
 
         ``estimated-billable-usage`` returns estimated USD by billing dimension
@@ -601,7 +603,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get basin metrics.
 
         Args:
@@ -632,7 +636,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get stream metrics.
 
         Args:

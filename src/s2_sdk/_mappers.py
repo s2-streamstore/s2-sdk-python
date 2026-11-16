@@ -39,6 +39,7 @@ from s2_sdk._types import (
     Timestamp,
     Timestamping,
     TimestampingMode,
+    Unknown,
 )
 
 _ReadStart = SeqNum | Timestamp | TailOffset
@@ -121,7 +122,7 @@ def stream_config_header(config: StreamConfig) -> str:
 
 
 def stream_config_from_json(data: dict[str, Any]) -> StreamConfig:
-    retention_policy: int | Literal["infinite"] | None = None
+    retention_policy: int | Literal["infinite"] | Unknown | None = None
     rp = data.get("retention_policy")
     if rp is not None:
         retention_policy = _retention_policy_from_json(rp)
@@ -146,19 +147,30 @@ def stream_config_from_json(data: dict[str, Any]) -> StreamConfig:
     )
 
 
-def _retention_policy_to_json(rp: int | Literal["infinite"]) -> dict[str, Any]:
+def _retention_policy_to_json(
+    rp: int | Literal["infinite"] | Unknown,
+) -> dict[str, Any] | str:
     if rp == "infinite":
         return {"infinite": {}}
+    if isinstance(rp, Unknown):
+        return rp.kind
     return {"age": rp}
 
 
 def _retention_policy_from_json(
     data: dict[str, Any],
-) -> int | Literal["infinite"] | None:
+) -> int | Literal["infinite"] | Unknown | None:
     if "infinite" in data:
         return "infinite"
-    # None for a policy kind this version does not know.
-    return data.get("age")
+    if "age" in data:
+        return data["age"]
+    return _unknown_kind(data)
+
+
+def _unknown_kind(data: dict[str, Any]) -> Unknown | None:
+    # A kind this SDK version does not know arrives as an object keyed by its name.
+    kind = next(iter(data), None)
+    return Unknown(kind) if kind is not None else None
 
 
 def basin_info_from_json(data: dict[str, Any]) -> BasinInfo:
@@ -217,10 +229,12 @@ def ensured_stream_info_from_json_and_headers(
 
 
 def _resource_set_to_json(
-    rs: ExactMatch | PrefixMatch | None,
-) -> dict[str, str] | None:
+    rs: ExactMatch | PrefixMatch | Unknown | None,
+) -> dict[str, str] | str | None:
     if rs is None:
         return None
+    if isinstance(rs, Unknown):
+        return rs.kind
     if isinstance(rs, ExactMatch):
         return {"exact": rs.value}
     return {"prefix": rs.value}
@@ -228,14 +242,14 @@ def _resource_set_to_json(
 
 def _resource_set_from_json(
     data: dict[str, Any] | None,
-) -> ExactMatch | PrefixMatch | None:
+) -> ExactMatch | PrefixMatch | Unknown | None:
     if data is None:
         return None
     if "exact" in data:
         return ExactMatch(data["exact"])
     if "prefix" in data:
         return PrefixMatch(data["prefix"])
-    return None
+    return _unknown_kind(data)
 
 
 def _rw_perms_to_json(perm: Permission | None) -> dict[str, bool] | None:
@@ -331,8 +345,8 @@ def access_token_info_from_json(data: dict[str, Any]) -> AccessTokenInfo:
 
 def metric_set_from_json(
     data: dict[str, Any],
-) -> list[Scalar | Accumulation | Gauge | Label]:
-    result: list[Scalar | Accumulation | Gauge | Label] = []
+) -> list[Scalar | Accumulation | Gauge | Label | Unknown]:
+    result: list[Scalar | Accumulation | Gauge | Label | Unknown] = []
     for metric in data.get("values", []):
         if "scalar" in metric:
             s = metric["scalar"]
@@ -371,6 +385,8 @@ def metric_set_from_json(
                     values=lb["values"],
                 )
             )
+        elif (unknown := _unknown_kind(metric)) is not None:
+            result.append(unknown)
     return result
 
 
