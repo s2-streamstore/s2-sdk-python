@@ -8,8 +8,8 @@ import pytest
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 import s2_sdk._s2s._append_session as append_session
+from s2_sdk import AppendIndefiniteFailureError, S2ServerError, SeqNumMismatchError
 from s2_sdk._client import HttpClient
-from s2_sdk._exceptions import AppendIndefiniteFailureError, S2ServerError
 from s2_sdk._s2s._protocol import Message
 from s2_sdk._types import AppendInput, Compression, Record, Retry
 
@@ -98,21 +98,36 @@ async def test_inflight_acks_drained_before_reconnect() -> None:
     assert responses[0].retired
 
 
+def _server_error(status_code: int, code: str) -> S2ServerError:
+    return S2ServerError(code=code, message=code, status_code=status_code)
+
+
 @pytest.mark.parametrize(
-    ("first_code", "first_status", "want_wrapped"),
+    ("first", "final", "want_wrapped"),
     [
-        ("unavailable", 503, True),
-        ("rate_limited", 429, False),
+        (
+            _server_error(503, "unavailable"),
+            _server_error(429, "rate_limited"),
+            True,
+        ),
+        (
+            _server_error(429, "rate_limited"),
+            _server_error(429, "rate_limited"),
+            False,
+        ),
+        (
+            _server_error(503, "unavailable"),
+            SeqNumMismatchError(
+                "seq_num_mismatch", "seq num mismatch", 412, expected_seq_num=1
+            ),
+            True,
+        ),
     ],
 )
 async def test_terminal_definite_error_preserves_prior_uncertainty(
-    first_code: str, first_status: int, want_wrapped: bool
+    first: S2ServerError, final: S2ServerError, want_wrapped: bool
 ) -> None:
-    errors = [
-        S2ServerError(code=first_code, message=first_code, status_code=first_status),
-        S2ServerError(code="rate_limited", message="rate_limited", status_code=429),
-    ]
-    final = errors[-1]
+    errors = [first, final]
 
     class _Client:
         @asynccontextmanager

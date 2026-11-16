@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from s2_sdk._exceptions import (
+    AppendConditionError,
     AppendIndefiniteFailureError,
     ConnectError,
     ConnectionRetiredError,
@@ -172,19 +173,12 @@ def http_retry_on(e: Exception) -> bool:
 def has_no_side_effects(e: Exception) -> bool:
     if isinstance(e, AppendIndefiniteFailureError):
         return False
-    if requires_reconnect(e):
+    if requires_reconnect(e) or isinstance(e, (AppendConditionError, ConnectError)):
         return True
     if isinstance(e, S2ServerError):
         return (e.status_code == 429 and e.code == "rate_limited") or (
             e.status_code == 502 and e.code == "hot_server"
         )
-    if isinstance(e, ConnectError):
-        cause = e.__cause__
-        while cause is not None:
-            if isinstance(cause, ConnectionRefusedError):
-                return True
-            cause = cause.__cause__
-        return False
     return False
 
 

@@ -195,4 +195,8 @@
 .. autoclass:: ReadUnwrittenError()
     :members:
     :show-inheritance:
+
+.. autoclass:: AppendIndefiniteFailureError()
+    :members:
+    :show-inheritance:
 ```

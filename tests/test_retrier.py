@@ -1,8 +1,14 @@
+import socket
 import sys
 
 import pytest
 
-from s2_sdk._exceptions import AppendIndefiniteFailureError, S2ServerError
+from s2_sdk import (
+    AppendIndefiniteFailureError,
+    FencingTokenMismatchError,
+    S2ServerError,
+)
+from s2_sdk._exceptions import ConnectError
 from s2_sdk._retrier import (
     Retrier,
     compute_backoff,
@@ -36,6 +42,29 @@ class TestWithPriorUncertainty:
         assert with_prior_uncertainty(wrapped, True) is wrapped
 
 
+class TestHasNoSideEffects:
+    def test_condition_failure(self):
+        e = FencingTokenMismatchError(
+            "fencing_token_mismatch", "fencing token mismatch", 412, "42"
+        )
+        assert has_no_side_effects(e)
+
+    @pytest.mark.parametrize(
+        "cause",
+        [
+            None,
+            ConnectionRefusedError(61, "Connection refused"),
+            socket.gaierror(8, "nodename nor servname provided"),
+            OSError(51, "Network is unreachable"),
+        ],
+    )
+    def test_connect_error(self, cause: OSError | None):
+        e = ConnectError("connect failed")
+        e.__cause__ = cause
+        assert has_no_side_effects(e)
+        assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
+
+
 class TestRetrierAppendUncertainty:
     def _retrier(self) -> Retrier:
         return Retrier(
@@ -62,6 +91,20 @@ class TestRetrierAppendUncertainty:
         with pytest.raises(AppendIndefiniteFailureError) as exc_info:
             await self._run([_server_error(503, "unavailable"), final, final])
         assert exc_info.value.final_attempt_error is final
+
+    async def test_indefinite_then_condition_failure_is_wrapped(self):
+        final = FencingTokenMismatchError(
+            "fencing_token_mismatch", "fencing token mismatch", 412, "42"
+        )
+        with pytest.raises(AppendIndefiniteFailureError) as exc_info:
+            await self._run([_server_error(503, "unavailable"), final])
+        assert exc_info.value.final_attempt_error is final
+
+    async def test_connect_error_does_not_set_uncertainty(self):
+        final = _server_error(429, "rate_limited")
+        with pytest.raises(S2ServerError) as exc_info:
+            await self._run([ConnectError("timed out"), final, final])
+        assert exc_info.value is final
 
     async def test_definite_then_definite_is_not_wrapped(self):
         final = _server_error(429, "rate_limited")
