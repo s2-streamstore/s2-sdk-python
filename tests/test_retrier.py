@@ -6,6 +6,7 @@ import pytest
 from s2_sdk import (
     AppendIndefiniteFailureError,
     FencingTokenMismatchError,
+    S2ClientError,
     S2ServerError,
 )
 from s2_sdk._exceptions import ConnectError
@@ -41,14 +42,35 @@ class TestWithPriorUncertainty:
         assert not has_no_side_effects(wrapped)
         assert with_prior_uncertainty(wrapped, True) is wrapped
 
+    @pytest.mark.parametrize(
+        "e",
+        [
+            _server_error(412, "unknown"),
+            FencingTokenMismatchError(
+                "fencing_token_mismatch", "fencing token mismatch", 412, "42"
+            ),
+            _server_error(403, "permission_denied"),
+            _server_error(404, "stream_not_found"),
+        ],
+    )
+    def test_client_error_status_wrapped(self, e: S2ServerError):
+        wrapped = with_prior_uncertainty(e, True)
+        assert isinstance(wrapped, AppendIndefiniteFailureError)
+        assert wrapped.final_attempt_error is e
+
+    def test_request_timeout_not_wrapped(self):
+        e = _server_error(408, "request_timeout")
+        assert with_prior_uncertainty(e, True) is e
+
+    def test_transport_error_normalized(self):
+        e = ConnectError("timed out")
+        wrapped = with_prior_uncertainty(e, True)
+        assert isinstance(wrapped, AppendIndefiniteFailureError)
+        assert isinstance(wrapped.final_attempt_error, S2ClientError)
+        assert wrapped.final_attempt_error.__cause__ is e
+
 
 class TestHasNoSideEffects:
-    def test_condition_failure(self):
-        e = FencingTokenMismatchError(
-            "fencing_token_mismatch", "fencing token mismatch", 412, "42"
-        )
-        assert has_no_side_effects(e)
-
     @pytest.mark.parametrize(
         "cause",
         [

@@ -10,6 +10,7 @@ import s2_sdk._generated.s2.v1.s2_pb2 as pb
 import s2_sdk._s2s._append_session as append_session
 from s2_sdk import AppendIndefiniteFailureError, S2ServerError, SeqNumMismatchError
 from s2_sdk._client import HttpClient
+from s2_sdk._exceptions import ConnectError
 from s2_sdk._s2s._protocol import Message
 from s2_sdk._types import AppendInput, Compression, Record, Retry
 
@@ -122,10 +123,15 @@ def _server_error(status_code: int, code: str) -> S2ServerError:
             ),
             True,
         ),
+        (
+            ConnectError("Connection to host:443 timed out"),
+            _server_error(429, "rate_limited"),
+            False,
+        ),
     ],
 )
 async def test_terminal_definite_error_preserves_prior_uncertainty(
-    first: S2ServerError, final: S2ServerError, want_wrapped: bool
+    first: Exception, final: S2ServerError, want_wrapped: bool
 ) -> None:
     errors = [first, final]
 

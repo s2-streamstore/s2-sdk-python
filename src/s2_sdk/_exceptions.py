@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from functools import wraps
 from inspect import isasyncgenfunction, iscoroutinefunction
-from typing import TYPE_CHECKING, Any, Never
+from typing import TYPE_CHECKING, Any, Never, overload
 
 if TYPE_CHECKING:
     from s2_sdk._types import StreamPosition
@@ -182,6 +182,7 @@ AppendConditionError.__module__ = "s2_sdk"
 FencingTokenMismatchError.__module__ = "s2_sdk"
 SeqNumMismatchError.__module__ = "s2_sdk"
 ReadUnwrittenError.__module__ = "s2_sdk"
+AppendIndefiniteFailureError.__module__ = "s2_sdk"
 
 
 class TransportError(Exception):
@@ -189,7 +190,7 @@ class TransportError(Exception):
 
 
 class ConnectError(TransportError):
-    """Failed to establish TCP/TLS connection."""
+    """Could not get a connection ready for a request. No request bytes were sent."""
 
 
 class ReadTimeoutError(TransportError):
@@ -218,6 +219,10 @@ def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
     return e
 
 
+@overload
+def normalize_exception(e: Exception) -> Exception: ...
+@overload
+def normalize_exception(e: BaseException) -> BaseException: ...
 def normalize_exception(e: BaseException) -> BaseException:
     e = _maybe_unwrap_exception_group(e)
 

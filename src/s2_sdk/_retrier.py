@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from typing import Callable
 
 from s2_sdk._exceptions import (
-    AppendConditionError,
     AppendIndefiniteFailureError,
     ConnectError,
     ConnectionRetiredError,
     S2ServerError,
     ServerDrainingError,
     TransportError,
+    normalize_exception,
 )
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
@@ -173,7 +173,7 @@ def http_retry_on(e: Exception) -> bool:
 def has_no_side_effects(e: Exception) -> bool:
     if isinstance(e, AppendIndefiniteFailureError):
         return False
-    if requires_reconnect(e) or isinstance(e, (AppendConditionError, ConnectError)):
+    if requires_reconnect(e) or isinstance(e, ConnectError):
         return True
     if isinstance(e, S2ServerError):
         return (e.status_code == 429 and e.code == "rate_limited") or (
@@ -182,13 +182,23 @@ def has_no_side_effects(e: Exception) -> bool:
     return False
 
 
+def is_definite_failure(e: Exception) -> bool:
+    if has_no_side_effects(e):
+        return True
+    return (
+        isinstance(e, S2ServerError)
+        and 400 <= e.status_code < 500
+        and e.status_code != 408
+    )
+
+
 def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:
     """Wrap a definite final error if an earlier attempt may have taken effect.
 
     Already indefinite errors are returned unchanged.
     """
-    if prior_uncertainty and has_no_side_effects(e):
-        return AppendIndefiniteFailureError(e)
+    if prior_uncertainty and is_definite_failure(e):
+        return AppendIndefiniteFailureError(normalize_exception(e))
     return e
 
 
