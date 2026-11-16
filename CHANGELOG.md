@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.13.0...v0.13.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* tolerate response values this SDK version does not know ([#151](https://github.com/s2-streamstore/s2-sdk-python/issues/151)) ([4ed0f78](https://github.com/s2-streamstore/s2-sdk-python/commit/4ed0f7891312ebe6be20088d44420cc5b0fcf4fb))
+
 ## [0.13.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.12.0...v0.13.0) (2026-10-14)
 
 
