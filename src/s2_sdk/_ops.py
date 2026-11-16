@@ -255,7 +255,7 @@ class S2:
             self._account_client.unary_request, "PUT", f"/v1/basins/{name}", json=json
         )
         return ensured_basin_info_from_json_and_headers(
-            response.json(), response.headers
+            response.json(), response.status_code, response.headers
         )
 
     @fallible
@@ -568,7 +568,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get account metrics.
 
         ``estimated-billable-usage`` returns estimated USD by billing dimension
@@ -601,7 +603,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get basin metrics.
 
         Args:
@@ -632,7 +636,9 @@ class S2:
         start: int | None = None,
         end: int | None = None,
         interval: types.TimeseriesInterval | None = None,
-    ) -> list[types.Scalar | types.Accumulation | types.Gauge | types.Label]:
+    ) -> list[
+        types.Scalar | types.Accumulation | types.Gauge | types.Label | types.Unknown
+    ]:
         """Get stream metrics.
 
         Args:
@@ -772,7 +778,7 @@ class S2Basin:
             self._client.unary_request, "PUT", _stream_path(name), json=json
         )
         return ensured_stream_info_from_json_and_headers(
-            response.json(), response.headers
+            response.json(), response.status_code, response.headers
         )
 
     @fallible

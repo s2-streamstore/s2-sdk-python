@@ -34,6 +34,31 @@ class _DocEnum(Enum):
         return f"{type(self).__name__}.{self.name}"
 
 
+class _OpenEnum(_DocEnum):
+    # Values returned by the service can gain new members. An unrecognized one is
+    # kept as a member whose name and value are the wire string, so a newer
+    # service does not fail parsing and the value can be sent back unchanged.
+    @classmethod
+    def _missing_(cls, value):
+        if not isinstance(value, str):
+            return None
+        member = object.__new__(cls)
+        member._name_ = value
+        member._value_ = value
+        return cls._value2member_map_.setdefault(value, member)
+
+
+@dataclass(slots=True)
+class Unknown:
+    """A kind of value returned by the service that this SDK version does not recognize.
+
+    Only the kind is kept, so it cannot be sent back to the service.
+    """
+
+    kind: str
+    """Name of the kind, as returned by the service."""
+
+
 class Compression(_DocEnum):
     """Compression algorithm for requests and responses."""
 
@@ -52,7 +77,7 @@ class AppendRetryPolicy(_DocEnum):
     )
 
 
-class Encryption(_DocEnum):
+class Encryption(_OpenEnum):
     """Encryption algorithm."""
 
     AEGIS_256 = "aegis-256", "AEGIS-256."
@@ -383,7 +408,7 @@ class LocationInfo:
     """Default storage class for this location."""
 
 
-class TimestampingMode(_DocEnum):
+class TimestampingMode(_OpenEnum):
     """Timestamping mode for appends. Timestamps are milliseconds since Unix epoch."""
 
     CLIENT_PREFER = (
@@ -400,7 +425,7 @@ class TimestampingMode(_DocEnum):
     )
 
 
-class Operation(_DocEnum):
+class Operation(_OpenEnum):
     """Granular operation for access token scoping."""
 
     LIST_BASINS = "list-basins"
@@ -437,7 +462,7 @@ class Permission(_DocEnum):
     READ_WRITE = "read-write"
 
 
-class MetricUnit(_DocEnum):
+class MetricUnit(_OpenEnum):
     """Unit of a metric value."""
 
     BYTES = "bytes"
@@ -445,7 +470,7 @@ class MetricUnit(_DocEnum):
     USD = "usd"
 
 
-class TimeseriesInterval(_DocEnum):
+class TimeseriesInterval(_OpenEnum):
     """Bucket interval for timeseries metrics."""
 
     MINUTE = "minute"
@@ -496,7 +521,7 @@ class StreamConfig:
     storage_class: str | None = None
     """Storage class for recent appends. See :meth:`S2.list_locations`."""
 
-    retention_policy: int | Literal["infinite"] | None = None
+    retention_policy: int | Literal["infinite"] | Unknown | None = None
     """Retention duration in seconds, or ``"infinite"``. Default is 7 days."""
 
     timestamping: Timestamping | None = None
@@ -629,13 +654,13 @@ class OperationGroupPermissions:
 class AccessTokenScope:
     """Scope of an access token."""
 
-    basins: ExactMatch | PrefixMatch | None = None
+    basins: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted basins."""
 
-    streams: ExactMatch | PrefixMatch | None = None
+    streams: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted streams."""
 
-    access_tokens: ExactMatch | PrefixMatch | None = None
+    access_tokens: ExactMatch | PrefixMatch | Unknown | None = None
     """Permitted access tokens."""
 
     op_groups: OperationGroupPermissions | None = None

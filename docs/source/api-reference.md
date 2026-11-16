@@ -138,7 +138,7 @@
 .. autoclass:: OperationGroupPermissions
     :members:
 
-.. autoclass:: AccessTokenScope(basins: ExactMatch | PrefixMatch | None = None, streams: ExactMatch | PrefixMatch | None = None, access_tokens: ExactMatch | PrefixMatch | None = None, op_groups: OperationGroupPermissions | None = None, ops: list[Operation] = [])
+.. autoclass:: AccessTokenScope(basins: ExactMatch | PrefixMatch | Unknown | None = None, streams: ExactMatch | PrefixMatch | Unknown | None = None, access_tokens: ExactMatch | PrefixMatch | Unknown | None = None, op_groups: OperationGroupPermissions | None = None, ops: list[Operation] = [])
     :members:
 
 .. autoclass:: AccessTokenInfo()
@@ -164,6 +164,9 @@
     :members:
 
 .. autoclass:: Label()
+    :members:
+
+.. autoclass:: Unknown()
     :members:
 
 .. autoclass:: S2Error()

@@ -62,6 +62,7 @@ from s2_sdk._types import (
     Timestamp,
     Timestamping,
     TimestampingMode,
+    Unknown,
     metered_bytes,
 )
 
@@ -127,6 +128,7 @@ __all__ = [
     "Accumulation",
     "Gauge",
     "Label",
+    "Unknown",
     "S2Error",
     "S2ClientError",
     "S2ServerError",
