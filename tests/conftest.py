@@ -5,16 +5,12 @@ from typing import AsyncGenerator, Final
 import pytest
 import pytest_asyncio
 
-from s2_sdk import S2, Compression, Endpoints, Retry, S2Basin, S2ServerError, S2Stream
+from s2_sdk import S2, Compression, Endpoints, Retry, S2Basin, S2Stream
 
 pytest_plugins = ["pytest_asyncio"]
 
 
 BASIN_PREFIX: Final[str] = "test-py-sdk"
-
-
-def server_error(status_code: int, code: str) -> S2ServerError:
-    return S2ServerError(code=code, message=code, status_code=status_code)
 
 
 def pytest_addoption(parser):

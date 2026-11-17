@@ -775,6 +775,8 @@ class Connection:
                 raise UnprocessedRequestError(
                     f"Stream failed before the request was sent: {state.error}"
                 ) from state.error
+            if self._send_dead:
+                raise UnprocessedRequestError("Connection is closed")
             pending_state = self._pending_streams.pop(id(state), None)
             if pending_state is None:
                 raise UnprocessedRequestError("Stream reservation missing")
@@ -803,7 +805,6 @@ class Connection:
                 raise state.error
 
             # Window check + send in a single lock acquisition to avoid TOCTOU.
-            sent = False
             async with self._write_lock:
                 window = self._h2.local_flow_control_window(stream_id)
                 if window > 0:
@@ -821,10 +822,7 @@ class Connection:
                         on_write()
                     await self._flush()
                     offset += chunk_size
-                    sent = True
-
-            if sent:
-                continue
+                    continue
 
             # Window exhausted — wait for update (lock released).
             # Caller-level timeouts (unary or streaming) will cancel this
@@ -1023,12 +1021,12 @@ class Connection:
             state = self._streams.get(event.stream_id)
             if state:
                 message = f"Stream reset with error code {event.error_code}"
-                e: TransportError
-                if event.error_code == h2.errors.ErrorCodes.REFUSED_STREAM:
-                    e = UnprocessedRequestError(message)
-                else:
-                    e = ProtocolError(message, error_code=event.error_code)
-                self._fail_stream(state, e)
+                self._fail_stream(
+                    state,
+                    UnprocessedRequestError(message)
+                    if event.error_code == h2.errors.ErrorCodes.REFUSED_STREAM
+                    else ProtocolError(message),
+                )
 
         elif isinstance(event, h2.events.ConnectionTerminated):
             self._goaway_received = True
@@ -1045,9 +1043,7 @@ class Connection:
                 for state in self._pending_streams.values():
                     self._fail_stream(state, unprocessed)
             else:
-                self._fail_all_streams(
-                    ProtocolError(message, error_code=event.error_code)
-                )
+                self._fail_all_streams(ProtocolError(message))
 
         elif isinstance(event, h2.events.RemoteSettingsChanged):
             self._settings_received.set()

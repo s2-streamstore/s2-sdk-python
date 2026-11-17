@@ -30,6 +30,10 @@ from s2_sdk._types import Compression
 _DEFAULT_MAX_STREAMS = 100
 
 
+def _connection() -> Connection:
+    return Connection(host="localhost", port=443, ssl_context=None, connect_timeout=5.0)
+
+
 def _mock_connection(
     open_streams: int = 0,
     available: bool = True,
@@ -242,14 +246,7 @@ async def test_unary_request_timeout_acks_and_resets_stream():
 
 @pytest.mark.asyncio
 async def test_send_headers_allocates_ids_from_h2_under_lock():
-    from s2_sdk._client import Connection
-
-    conn = Connection(
-        host="localhost",
-        port=443,
-        ssl_context=None,
-        connect_timeout=5.0,
-    )
+    conn = _connection()
     conn._h2 = MagicMock()
     conn._h2.get_next_available_stream_id.side_effect = [1, 3]
 
@@ -267,14 +264,7 @@ async def test_send_headers_allocates_ids_from_h2_under_lock():
 
 @pytest.mark.asyncio
 async def test_reserve_stream_counts_pending_capacity():
-    from s2_sdk._client import Connection
-
-    conn = Connection(
-        host="localhost",
-        port=443,
-        ssl_context=None,
-        connect_timeout=5.0,
-    )
+    conn = _connection()
     conn._h2 = MagicMock()
     conn._h2.remote_settings.max_concurrent_streams = 1
     conn._settings_received.set()
@@ -598,14 +588,7 @@ async def test_drain_body_resets_stream_on_generator_error():
 
 @pytest.mark.asyncio
 async def test_close_fails_inflight_streams():
-    from s2_sdk._client import Connection
-
-    conn = Connection(
-        host="localhost",
-        port=443,
-        ssl_context=None,
-        connect_timeout=5.0,
-    )
+    conn = _connection()
     state = _StreamState()
     conn._streams[1] = state
 
@@ -619,14 +602,7 @@ async def test_close_fails_inflight_streams():
 
 @pytest.mark.asyncio
 async def test_fail_stream_is_idempotent_for_queue_sentinel():
-    from s2_sdk._client import Connection
-
-    conn = Connection(
-        host="localhost",
-        port=443,
-        ssl_context=None,
-        connect_timeout=5.0,
-    )
+    conn = _connection()
     state = _StreamState()
 
     conn._fail_stream(state, ConnectionClosedError("first"))
@@ -652,16 +628,7 @@ def test_raise_response_error_falls_back_to_text_for_non_json_special_status(
 
 @pytest.mark.asyncio
 async def test_remote_settings_changed_wakes_waiters():
-    import h2.events
-
-    from s2_sdk._client import Connection
-
-    conn = Connection(
-        host="localhost",
-        port=443,
-        ssl_context=None,
-        connect_timeout=5.0,
-    )
+    conn = _connection()
     state = _StreamState()
     conn._streams[1] = state
 
@@ -683,10 +650,6 @@ def test_origin_invalid_port_is_client_error():
 
     with pytest.raises(S2ClientError, match="Invalid endpoint URL"):
         _origin("https://example.com:99999")
-
-
-def _connection() -> Connection:
-    return Connection(host="localhost", port=443, ssl_context=None, connect_timeout=5.0)
 
 
 @pytest.mark.asyncio
@@ -719,6 +682,19 @@ async def test_send_headers_after_reserved_stream_failed_is_unprocessed():
         await conn.send_headers(state, [(":method", "POST")])
 
     assert exc_info.value.__cause__ is cause
+    conn._h2.send_headers.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_headers_after_send_side_died_is_unprocessed():
+    conn = _connection()
+    conn._h2 = MagicMock()
+    conn._send_dead = True
+    state = conn.reserve_stream()
+
+    with pytest.raises(UnprocessedRequestError):
+        await conn.send_headers(state, [(":method", "POST")])
+
     conn._h2.send_headers.assert_not_called()
 
 

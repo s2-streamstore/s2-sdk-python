@@ -1,72 +1,64 @@
-import socket
 import sys
 
 import pytest
 
-from s2_sdk import (
-    AppendIndefiniteFailureError,
-    FencingTokenMismatchError,
-    S2ClientError,
-    S2ServerError,
-)
+from s2_sdk import AppendIndefiniteFailureError, S2ClientError, S2ServerError
 from s2_sdk._exceptions import ConnectError, UnprocessedRequestError
 from s2_sdk._retrier import (
     Retrier,
     compute_backoff,
     has_no_side_effects,
+    http_retry_on,
     is_safe_to_retry_unary,
     with_prior_uncertainty,
 )
 from s2_sdk._types import AppendRetryPolicy
-from tests.conftest import server_error
+
+
+def _server_error(status_code: int, code: str) -> S2ServerError:
+    return S2ServerError(code=code, message=code, status_code=status_code)
+
+
+@pytest.mark.parametrize(
+    ("e", "retryable", "no_side_effects"),
+    [
+        (ConnectError("Connection to host:443 timed out"), True, True),
+        (UnprocessedRequestError("GOAWAY received"), True, True),
+        (_server_error(409, "transaction_conflict"), True, True),
+        (_server_error(404, "stream_not_found"), False, True),
+        (_server_error(412, "unknown"), False, True),
+        (_server_error(503, "unavailable"), True, False),
+        (_server_error(499, "client_hangup"), False, False),
+        (_server_error(500, "rate_limited"), False, False),
+        (_server_error(503, "code_from_newer_server"), True, False),
+        (_server_error(400, "code_from_newer_server"), False, False),
+    ],
+)
+def test_error_classification(e: Exception, retryable: bool, no_side_effects: bool):
+    assert http_retry_on(e) is retryable
+    assert has_no_side_effects(e) is no_side_effects
+    assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS) is (
+        retryable and no_side_effects
+    )
 
 
 class TestWithPriorUncertainty:
     def test_definite_error_unchanged_without_prior_uncertainty(self):
-        e = server_error(429, "rate_limited")
+        e = _server_error(429, "rate_limited")
         assert with_prior_uncertainty(e, False) is e
 
     def test_indefinite_error_not_wrapped(self):
-        e = server_error(503, "unavailable")
+        e = _server_error(503, "unavailable")
         assert with_prior_uncertainty(e, True) is e
 
     def test_definite_error_wrapped(self):
-        e = server_error(429, "rate_limited")
+        e = _server_error(429, "rate_limited")
         wrapped = with_prior_uncertainty(e, True)
         assert isinstance(wrapped, AppendIndefiniteFailureError)
         assert wrapped.final_attempt_error is e
         assert wrapped.__cause__ is e
         assert not has_no_side_effects(wrapped)
         assert with_prior_uncertainty(wrapped, True) is wrapped
-
-    @pytest.mark.parametrize(
-        "e",
-        [
-            server_error(412, "unknown"),
-            FencingTokenMismatchError(
-                "fencing_token_mismatch", "fencing token mismatch", 412, "42"
-            ),
-            server_error(403, "permission_denied"),
-            server_error(404, "stream_not_found"),
-            server_error(501, "not_implemented"),
-        ],
-    )
-    def test_no_side_effect_error_wrapped(self, e: S2ServerError):
-        wrapped = with_prior_uncertainty(e, True)
-        assert isinstance(wrapped, AppendIndefiniteFailureError)
-        assert wrapped.final_attempt_error is e
-
-    @pytest.mark.parametrize(
-        "e",
-        [
-            server_error(408, "request_timeout"),
-            server_error(499, "client_hangup"),
-            server_error(400, "code_from_newer_server"),
-            server_error(500, "rate_limited"),
-        ],
-    )
-    def test_possible_side_effect_error_not_wrapped(self, e: S2ServerError):
-        assert with_prior_uncertainty(e, True) is e
 
     def test_transport_error_normalized(self):
         e = ConnectError("timed out")
@@ -75,47 +67,6 @@ class TestWithPriorUncertainty:
         assert isinstance(wrapped.final_attempt_error, S2ClientError)
         assert wrapped.final_attempt_error.__cause__ is e
         assert wrapped.__cause__ is wrapped.final_attempt_error
-
-
-class TestHasNoSideEffects:
-    @pytest.mark.parametrize(
-        "cause",
-        [
-            None,
-            socket.gaierror(8, "nodename nor servname provided"),
-        ],
-    )
-    def test_connect_error(self, cause: OSError | None):
-        e = ConnectError("connect failed")
-        e.__cause__ = cause
-        assert has_no_side_effects(e)
-        assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
-
-    @pytest.mark.parametrize(
-        "e",
-        [
-            UnprocessedRequestError("GOAWAY received"),
-            server_error(409, "transaction_conflict"),
-            server_error(503, "server_draining"),
-        ],
-    )
-    def test_retryable_without_side_effects(self, e: Exception):
-        assert has_no_side_effects(e)
-        assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
-
-    @pytest.mark.parametrize(
-        "e",
-        [
-            server_error(408, "request_timeout"),
-            server_error(500, "storage"),
-            server_error(503, "unavailable"),
-            server_error(504, "upstream_timeout"),
-        ],
-    )
-    def test_retryable_with_possible_side_effects(self, e: Exception):
-        assert not has_no_side_effects(e)
-        assert not is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
-        assert is_safe_to_retry_unary(e, AppendRetryPolicy.ALL)
 
 
 class TestRetrierAppendUncertainty:
@@ -140,38 +91,25 @@ class TestRetrierAppendUncertainty:
         return await self._retrier()(f)
 
     async def test_indefinite_then_definite_is_wrapped(self):
-        final = server_error(429, "rate_limited")
+        final = _server_error(429, "rate_limited")
         with pytest.raises(AppendIndefiniteFailureError) as exc_info:
-            await self._run([server_error(503, "unavailable"), final, final])
+            await self._run([_server_error(503, "unavailable"), final, final])
         assert exc_info.value.final_attempt_error is final
 
-    async def test_connect_error_does_not_set_uncertainty(self):
-        final = server_error(429, "rate_limited")
+    async def test_definite_then_definite_is_not_wrapped(self):
+        final = _server_error(429, "rate_limited")
         with pytest.raises(S2ServerError) as exc_info:
-            await self._run([ConnectError("timed out"), final, final])
-        assert exc_info.value is final
-
-    @pytest.mark.parametrize(
-        "first",
-        [
-            server_error(429, "rate_limited"),
-            server_error(409, "transaction_conflict"),
-        ],
-    )
-    async def test_definite_then_definite_is_not_wrapped(self, first: S2ServerError):
-        final = server_error(429, "rate_limited")
-        with pytest.raises(S2ServerError) as exc_info:
-            await self._run([first, final, final])
+            await self._run([_server_error(429, "rate_limited"), final, final])
         assert exc_info.value is final
 
     async def test_indefinite_then_indefinite_is_not_wrapped(self):
-        final = server_error(503, "unavailable")
+        final = _server_error(503, "unavailable")
         with pytest.raises(S2ServerError) as exc_info:
-            await self._run([server_error(503, "unavailable"), final, final])
+            await self._run([_server_error(503, "unavailable"), final, final])
         assert exc_info.value is final
 
     async def test_success_after_indefinite(self):
-        assert await self._run([server_error(503, "unavailable"), "ok"]) == "ok"
+        assert await self._run([_server_error(503, "unavailable"), "ok"]) == "ok"
 
 
 class TestComputeBackoff:

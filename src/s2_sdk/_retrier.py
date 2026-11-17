@@ -72,11 +72,7 @@ class Retrier:
                         self.should_retry_on(e),
                         attempt >= max_retries,
                     )
-                    if self.track_append_uncertainty:
-                        wrapped = with_prior_uncertainty(e, prior_uncertainty)
-                        if wrapped is not e:
-                            raise wrapped
-                    raise e
+                    raise with_prior_uncertainty(e, prior_uncertainty)
 
 
 @dataclass(slots=True)
@@ -160,52 +156,14 @@ def requires_reconnect(e: Exception) -> bool:
 
 def http_retry_on(e: Exception) -> bool:
     if isinstance(e, S2ServerError):
-        if e.status_code in (408, 429, 500, 502, 503, 504):
-            return True
-        if e.status_code == 409 and e.code == "transaction_conflict":
-            return True
-    if isinstance(e, TransportError):
-        return True
-    return False
-
-
-# Error codes the S2 API guarantees had no side effects, with their HTTP status.
-# See https://s2.dev/docs/api/error-codes.
-_NO_SIDE_EFFECT_CODES: dict[str, int] = {
-    "access_token_not_found": 404,
-    "authn": 401,
-    "bad_frame": 400,
-    "bad_header": 400,
-    "bad_json": 400,
-    "bad_path": 400,
-    "bad_proto": 400,
-    "bad_query": 400,
-    "basin_deletion_pending": 409,
-    "basin_not_found": 404,
-    "decryption_failed": 400,
-    "hot_server": 502,
-    "invalid": 422,
-    "not_implemented": 501,
-    "permission_denied": 403,
-    "quota_exhausted": 403,
-    "rate_limited": 429,
-    "resource_already_exists": 409,
-    "server_draining": 503,
-    "stream_deletion_pending": 409,
-    "stream_not_found": 404,
-    "transaction_conflict": 409,
-}
+        return e._is_retryable()
+    return isinstance(e, TransportError)
 
 
 def has_no_side_effects(e: Exception) -> bool:
-    if isinstance(e, UnprocessedRequestError):
-        return True
     if isinstance(e, S2ServerError):
-        # 412 is only used for append condition failures, which reject the append.
-        return (
-            e.status_code == 412 or _NO_SIDE_EFFECT_CODES.get(e.code) == e.status_code
-        )
-    return False
+        return e._has_no_side_effects()
+    return isinstance(e, UnprocessedRequestError)
 
 
 def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:

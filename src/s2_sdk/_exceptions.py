@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from functools import wraps
 from inspect import isasyncgenfunction, iscoroutinefunction
-from typing import TYPE_CHECKING, Any, Never, overload
+from typing import TYPE_CHECKING, Any, NamedTuple, Never, overload
 
 if TYPE_CHECKING:
     from s2_sdk._types import StreamPosition
@@ -43,6 +43,46 @@ class S2ClientError(S2Error):
 UNKNOWN_CODE = "unknown"
 
 
+class _ErrorCodeInfo(NamedTuple):
+    status: int
+    retryable: bool
+    no_side_effects: bool
+
+
+# Error codes documented at https://s2.dev/docs/api/error-codes.
+_ERROR_CODES: dict[str, _ErrorCodeInfo] = {
+    "access_token_not_found": _ErrorCodeInfo(404, False, True),
+    "authn": _ErrorCodeInfo(401, False, True),
+    "bad_frame": _ErrorCodeInfo(400, False, True),
+    "bad_header": _ErrorCodeInfo(400, False, True),
+    "bad_json": _ErrorCodeInfo(400, False, True),
+    "bad_path": _ErrorCodeInfo(400, False, True),
+    "bad_proto": _ErrorCodeInfo(400, False, True),
+    "bad_query": _ErrorCodeInfo(400, False, True),
+    "basin_deletion_pending": _ErrorCodeInfo(409, False, True),
+    "basin_not_found": _ErrorCodeInfo(404, False, True),
+    "client_hangup": _ErrorCodeInfo(499, False, False),
+    "decryption_failed": _ErrorCodeInfo(400, False, True),
+    "hot_server": _ErrorCodeInfo(502, True, True),
+    "invalid": _ErrorCodeInfo(422, False, True),
+    "not_implemented": _ErrorCodeInfo(501, False, True),
+    "other": _ErrorCodeInfo(500, True, False),
+    "permission_denied": _ErrorCodeInfo(403, False, True),
+    "quota_exhausted": _ErrorCodeInfo(403, False, True),
+    "rate_limited": _ErrorCodeInfo(429, True, True),
+    "request_timeout": _ErrorCodeInfo(408, True, False),
+    "resource_already_exists": _ErrorCodeInfo(409, False, True),
+    "server_draining": _ErrorCodeInfo(503, True, True),
+    "storage": _ErrorCodeInfo(500, True, False),
+    "stream_deletion_pending": _ErrorCodeInfo(409, False, True),
+    "stream_not_found": _ErrorCodeInfo(404, False, True),
+    "transaction_conflict": _ErrorCodeInfo(409, True, True),
+    "unavailable": _ErrorCodeInfo(503, True, False),
+    "upstream_timeout": _ErrorCodeInfo(504, True, False),
+}
+_RETRYABLE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+
+
 class S2ServerError(S2Error):
     """Error originating from the server.
 
@@ -63,6 +103,23 @@ class S2ServerError(S2Error):
         self.status_code = status_code
         self._retry_after: float | None = None
         super().__init__(message)
+
+    def _is_retryable(self) -> bool:
+        info = _ERROR_CODES.get(self.code)
+        if info is None:
+            return self.status_code in _RETRYABLE_STATUSES
+        return info.status == self.status_code and info.retryable
+
+    def _has_no_side_effects(self) -> bool:
+        # 412 is only used for append condition failures, which reject the append.
+        if self.status_code == 412:
+            return True
+        info = _ERROR_CODES.get(self.code)
+        return (
+            info is not None
+            and info.status == self.status_code
+            and info.no_side_effects
+        )
 
 
 class ServerDrainingError(S2ServerError):
@@ -211,10 +268,6 @@ class ConnectionRetiredError(UnprocessedRequestError):
 
 class ProtocolError(TransportError):
     """HTTP/2 protocol error (RST_STREAM, GOAWAY)."""
-
-    def __init__(self, message: str, error_code: int | None = None):
-        self.error_code = error_code
-        super().__init__(message)
 
 
 def _maybe_unwrap_exception_group(e: BaseException) -> BaseException:
