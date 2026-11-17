@@ -48,15 +48,24 @@ class TestWithPriorUncertainty:
             ),
             server_error(403, "permission_denied"),
             server_error(404, "stream_not_found"),
+            server_error(501, "not_implemented"),
         ],
     )
-    def test_client_error_status_wrapped(self, e: S2ServerError):
+    def test_no_side_effect_error_wrapped(self, e: S2ServerError):
         wrapped = with_prior_uncertainty(e, True)
         assert isinstance(wrapped, AppendIndefiniteFailureError)
         assert wrapped.final_attempt_error is e
 
-    def test_request_timeout_not_wrapped(self):
-        e = server_error(408, "request_timeout")
+    @pytest.mark.parametrize(
+        "e",
+        [
+            server_error(408, "request_timeout"),
+            server_error(499, "client_hangup"),
+            server_error(400, "code_from_newer_server"),
+            server_error(500, "rate_limited"),
+        ],
+    )
+    def test_possible_side_effect_error_not_wrapped(self, e: S2ServerError):
         assert with_prior_uncertainty(e, True) is e
 
     def test_transport_error_normalized(self):
@@ -82,10 +91,31 @@ class TestHasNoSideEffects:
         assert has_no_side_effects(e)
         assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
 
-    def test_unprocessed_request(self):
-        e = UnprocessedRequestError("GOAWAY received")
+    @pytest.mark.parametrize(
+        "e",
+        [
+            UnprocessedRequestError("GOAWAY received"),
+            server_error(409, "transaction_conflict"),
+            server_error(503, "server_draining"),
+        ],
+    )
+    def test_retryable_without_side_effects(self, e: Exception):
         assert has_no_side_effects(e)
         assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
+
+    @pytest.mark.parametrize(
+        "e",
+        [
+            server_error(408, "request_timeout"),
+            server_error(500, "storage"),
+            server_error(503, "unavailable"),
+            server_error(504, "upstream_timeout"),
+        ],
+    )
+    def test_retryable_with_possible_side_effects(self, e: Exception):
+        assert not has_no_side_effects(e)
+        assert not is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS)
+        assert is_safe_to_retry_unary(e, AppendRetryPolicy.ALL)
 
 
 class TestRetrierAppendUncertainty:

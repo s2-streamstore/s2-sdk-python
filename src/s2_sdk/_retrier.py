@@ -47,7 +47,7 @@ class Retrier:
                 return await f(*args, **kwargs)
             except Exception as e:
                 if attempt < max_retries and self.should_retry_on(e):
-                    if self.track_append_uncertainty and not is_definite_failure(e):
+                    if self.track_append_uncertainty and not has_no_side_effects(e):
                         prior_uncertainty = True
                     delay = compute_backoff(
                         attempt,
@@ -169,24 +169,43 @@ def http_retry_on(e: Exception) -> bool:
     return False
 
 
+# Error codes the S2 API guarantees had no side effects, with their HTTP status.
+# See https://s2.dev/docs/api/error-codes.
+_NO_SIDE_EFFECT_CODES: dict[str, int] = {
+    "access_token_not_found": 404,
+    "authn": 401,
+    "bad_frame": 400,
+    "bad_header": 400,
+    "bad_json": 400,
+    "bad_path": 400,
+    "bad_proto": 400,
+    "bad_query": 400,
+    "basin_deletion_pending": 409,
+    "basin_not_found": 404,
+    "decryption_failed": 400,
+    "hot_server": 502,
+    "invalid": 422,
+    "not_implemented": 501,
+    "permission_denied": 403,
+    "quota_exhausted": 403,
+    "rate_limited": 429,
+    "resource_already_exists": 409,
+    "server_draining": 503,
+    "stream_deletion_pending": 409,
+    "stream_not_found": 404,
+    "transaction_conflict": 409,
+}
+
+
 def has_no_side_effects(e: Exception) -> bool:
-    if isinstance(e, AppendIndefiniteFailureError):
-        return False
-    if requires_reconnect(e) or isinstance(e, UnprocessedRequestError):
+    if isinstance(e, UnprocessedRequestError):
         return True
     if isinstance(e, S2ServerError):
-        return (e.status_code == 429 and e.code == "rate_limited") or (
-            e.status_code == 502 and e.code == "hot_server"
+        # 412 is only used for append condition failures, which reject the append.
+        return (
+            e.status_code == 412 or _NO_SIDE_EFFECT_CODES.get(e.code) == e.status_code
         )
     return False
-
-
-def is_definite_failure(e: Exception) -> bool:
-    return has_no_side_effects(e) or (
-        isinstance(e, S2ServerError)
-        and 400 <= e.status_code < 500
-        and e.status_code != 408
-    )
 
 
 def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:
@@ -194,7 +213,7 @@ def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:
 
     Already indefinite errors are returned unchanged.
     """
-    if prior_uncertainty and is_definite_failure(e):
+    if prior_uncertainty and has_no_side_effects(e):
         return AppendIndefiniteFailureError(e)
     return e
 
@@ -206,6 +225,6 @@ def attempt_may_have_side_effects(
 
     Without a frame signal, assume the request may have been sent.
     """
-    return not is_definite_failure(e) and (
+    return not has_no_side_effects(e) and (
         frame_signal is None or frame_signal.is_signalled()
     )
