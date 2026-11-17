@@ -2,11 +2,13 @@ import sys
 
 import pytest
 
-from s2_sdk._exceptions import AppendIndefiniteFailureError, S2ServerError
+from s2_sdk import AppendIndefiniteFailureError, S2ClientError, S2ServerError
+from s2_sdk._exceptions import ConnectError, UnprocessedRequestError
 from s2_sdk._retrier import (
     Retrier,
     compute_backoff,
     has_no_side_effects,
+    http_retry_on,
     is_safe_to_retry_unary,
     with_prior_uncertainty,
 )
@@ -15,6 +17,29 @@ from s2_sdk._types import AppendRetryPolicy
 
 def _server_error(status_code: int, code: str) -> S2ServerError:
     return S2ServerError(code=code, message=code, status_code=status_code)
+
+
+@pytest.mark.parametrize(
+    ("e", "retryable", "no_side_effects"),
+    [
+        (ConnectError("Connection to host:443 timed out"), True, True),
+        (UnprocessedRequestError("GOAWAY received"), True, True),
+        (_server_error(409, "transaction_conflict"), True, True),
+        (_server_error(404, "stream_not_found"), False, True),
+        (_server_error(412, "unknown"), False, True),
+        (_server_error(503, "unavailable"), True, False),
+        (_server_error(499, "client_hangup"), False, False),
+        (_server_error(500, "rate_limited"), False, False),
+        (_server_error(503, "code_from_newer_server"), True, False),
+        (_server_error(400, "code_from_newer_server"), False, False),
+    ],
+)
+def test_error_classification(e: Exception, retryable: bool, no_side_effects: bool):
+    assert http_retry_on(e) is retryable
+    assert has_no_side_effects(e) is no_side_effects
+    assert is_safe_to_retry_unary(e, AppendRetryPolicy.NO_SIDE_EFFECTS) is (
+        retryable and no_side_effects
+    )
 
 
 class TestWithPriorUncertainty:
@@ -34,6 +59,14 @@ class TestWithPriorUncertainty:
         assert wrapped.__cause__ is e
         assert not has_no_side_effects(wrapped)
         assert with_prior_uncertainty(wrapped, True) is wrapped
+
+    def test_transport_error_normalized(self):
+        e = ConnectError("timed out")
+        wrapped = with_prior_uncertainty(e, True)
+        assert isinstance(wrapped, AppendIndefiniteFailureError)
+        assert isinstance(wrapped.final_attempt_error, S2ClientError)
+        assert wrapped.final_attempt_error.__cause__ is e
+        assert wrapped.__cause__ is wrapped.final_attempt_error
 
 
 class TestRetrierAppendUncertainty:

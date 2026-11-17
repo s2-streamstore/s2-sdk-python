@@ -8,11 +8,11 @@ from typing import Callable
 
 from s2_sdk._exceptions import (
     AppendIndefiniteFailureError,
-    ConnectError,
     ConnectionRetiredError,
     S2ServerError,
     ServerDrainingError,
     TransportError,
+    UnprocessedRequestError,
 )
 from s2_sdk._frame_signal import FrameSignal
 from s2_sdk._types import AppendRetryPolicy
@@ -72,11 +72,7 @@ class Retrier:
                         self.should_retry_on(e),
                         attempt >= max_retries,
                     )
-                    if self.track_append_uncertainty:
-                        wrapped = with_prior_uncertainty(e, prior_uncertainty)
-                        if wrapped is not e:
-                            raise wrapped from e
-                    raise e
+                    raise with_prior_uncertainty(e, prior_uncertainty)
 
 
 @dataclass(slots=True)
@@ -160,32 +156,14 @@ def requires_reconnect(e: Exception) -> bool:
 
 def http_retry_on(e: Exception) -> bool:
     if isinstance(e, S2ServerError):
-        if e.status_code in (408, 429, 500, 502, 503, 504):
-            return True
-        if e.status_code == 409 and e.code == "transaction_conflict":
-            return True
-    if isinstance(e, TransportError):
-        return True
-    return False
+        return e._is_retryable()
+    return isinstance(e, TransportError)
 
 
 def has_no_side_effects(e: Exception) -> bool:
-    if isinstance(e, AppendIndefiniteFailureError):
-        return False
-    if requires_reconnect(e):
-        return True
     if isinstance(e, S2ServerError):
-        return (e.status_code == 429 and e.code == "rate_limited") or (
-            e.status_code == 502 and e.code == "hot_server"
-        )
-    if isinstance(e, ConnectError):
-        cause = e.__cause__
-        while cause is not None:
-            if isinstance(cause, ConnectionRefusedError):
-                return True
-            cause = cause.__cause__
-        return False
-    return False
+        return e._has_no_side_effects()
+    return isinstance(e, UnprocessedRequestError)
 
 
 def with_prior_uncertainty(e: Exception, prior_uncertainty: bool) -> Exception:

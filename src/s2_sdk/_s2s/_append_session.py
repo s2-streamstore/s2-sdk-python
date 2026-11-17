@@ -173,16 +173,13 @@ async def run_append_session(
                         e,
                         attempt.value >= max_retries,
                     )
-                    wrapped = with_prior_uncertainty(
+                    raise with_prior_uncertainty(
                         e,
                         any(
                             inflight.prior_uncertainty
                             for inflight in session_state.inflight_inputs
                         ),
                     )
-                    if wrapped is e:
-                        raise
-                    raise wrapped from e
         await ack_queue.put(None)
 
     async with asyncio.TaskGroup() as tg:

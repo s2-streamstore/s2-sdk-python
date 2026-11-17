@@ -1,7 +1,7 @@
 class FrameSignal:
-    """Tracks whether any HTTP/2 DATA frames were written to the socket.
+    """Tracks whether any HTTP/2 DATA frames may have been written to the socket.
 
-    Signalled by the transport's ``on_write`` callback. An unsignalled
+    Signalled by the transport's ``on_write`` callback before each write. An unsignalled
     state at retry time proves no request data left the process, making
     the retry safe. Reset at the start of each attempt.
     """
