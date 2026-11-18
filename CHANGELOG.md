@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.13.1...v0.14.0) (2026-11-18)
+
+
+### Features
+
+* expose private networking details on locations ([#158](https://github.com/s2-streamstore/s2-sdk-python/issues/158)) ([79f465d](https://github.com/s2-streamstore/s2-sdk-python/commit/79f465d1cc925a8b09813a4d84bfaa570a7597ef))
+* network policies ([#159](https://github.com/s2-streamstore/s2-sdk-python/issues/159)) ([232b216](https://github.com/s2-streamstore/s2-sdk-python/commit/232b216333b2b8555b4f265f89e8d6a18a97c56e))
+
+
+### Bug Fixes
+
+* classify definite append failures correctly ([#154](https://github.com/s2-streamstore/s2-sdk-python/issues/154)) ([f067cf7](https://github.com/s2-streamstore/s2-sdk-python/commit/f067cf78aae3c7fb6269745771a244ef62d105a6))
+
 ## [0.13.1](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.13.0...v0.13.1) (2026-11-16)
 
 
