@@ -686,6 +686,57 @@ class AccessTokenInfo:
     auto_prefix_streams: bool
     """Whether to automatically prefix stream names during creation and strip the prefix during listing."""
 
+    network_policy: str | None = None
+    """Full reference, ``<slug>.<nonce>``, of the network policy the token is restricted by, if any."""
+
+
+@dataclass(slots=True)
+class PublicNetCidrs:
+    """Source addresses a token may be used from over the public path."""
+
+    cidrs: list[str]
+    """IP networks in CIDR notation, e.g. ``203.0.113.0/24``. Between 1 and 32."""
+
+
+@dataclass(slots=True)
+class AwsPrivateNetPolicy:
+    """AWS VPC endpoints a token may be used through."""
+
+    vpce_ids: list[str]
+    """VPC endpoint IDs. Between 1 and 32."""
+
+
+@dataclass(slots=True)
+class NetworkPolicy:
+    """Restriction a network policy applies to the access tokens bound to it.
+
+    At least one of ``public_net`` and ``private_net`` must be set. A path without
+    one is closed.
+    """
+
+    public_net: PublicNetCidrs | Unknown | None = None
+    """Governs requests arriving over the public path."""
+
+    private_net: AwsPrivateNetPolicy | Unknown | None = None
+    """Governs requests arriving through a private network."""
+
+
+@dataclass(slots=True)
+class NetworkPolicyInfo:
+    """Network policy information."""
+
+    id: str
+    """Full reference, ``<slug>.<nonce>``, which access tokens are bound to."""
+
+    slug: str
+    """Slug chosen at creation."""
+
+    created_at: datetime
+    """Creation time."""
+
+    policy: NetworkPolicy
+    """The restriction."""
+
 
 @dataclass(slots=True)
 class Scalar:

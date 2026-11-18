@@ -10,6 +10,7 @@ from s2_sdk._types import (
     Accumulation,
     AppendAck,
     AppendInput,
+    AwsPrivateNetPolicy,
     BasinConfig,
     BasinInfo,
     Encryption,
@@ -21,10 +22,13 @@ from s2_sdk._types import (
     Label,
     LocationInfo,
     MetricUnit,
+    NetworkPolicy,
+    NetworkPolicyInfo,
     Operation,
     OperationGroupPermissions,
     Permission,
     PrefixMatch,
+    PublicNetCidrs,
     ReadBatch,
     ReadLimit,
     Record,
@@ -283,6 +287,7 @@ def access_token_info_to_json(
     scope: AccessTokenScope,
     auto_prefix_streams: bool,
     expires_at: datetime | None,
+    network_policy: str | None = None,
 ) -> dict[str, Any]:
     scope_json: dict[str, Any] = {}
     if scope.basins is not None:
@@ -310,6 +315,8 @@ def access_token_info_to_json(
     }
     if expires_at is not None:
         result["expires_at"] = expires_at.isoformat()
+    if network_policy is not None:
+        result["network_policy"] = network_policy
     return result
 
 
@@ -340,6 +347,55 @@ def access_token_info_from_json(data: dict[str, Any]) -> AccessTokenInfo:
         if data.get("expires_at")
         else None,
         auto_prefix_streams=data.get("auto_prefix_streams", False),
+        network_policy=data.get("network_policy"),
+    )
+
+
+def network_policy_to_json(policy: NetworkPolicy) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    match policy.public_net:
+        case PublicNetCidrs(cidrs=cidrs):
+            result["public_net"] = {"cidrs": cidrs}
+        case Unknown(kind=kind):
+            result["public_net"] = kind
+    match policy.private_net:
+        case AwsPrivateNetPolicy(vpce_ids=vpce_ids):
+            result["private_net"] = {"aws": {"vpce_ids": vpce_ids}}
+        case Unknown(kind=kind):
+            result["private_net"] = kind
+    return result
+
+
+def _public_net_policy_from_json(
+    data: dict[str, Any] | None,
+) -> PublicNetCidrs | Unknown | None:
+    if data is None:
+        return None
+    if (cidrs := data.get("cidrs")) is not None:
+        return PublicNetCidrs(cidrs=cidrs)
+    return _unknown_kind(data)
+
+
+def _private_net_policy_from_json(
+    data: dict[str, Any] | None,
+) -> AwsPrivateNetPolicy | Unknown | None:
+    if data is None:
+        return None
+    if (aws := data.get("aws")) is not None:
+        return AwsPrivateNetPolicy(vpce_ids=aws["vpce_ids"])
+    return _unknown_kind(data)
+
+
+def network_policy_info_from_json(data: dict[str, Any]) -> NetworkPolicyInfo:
+    policy = data["policy"]
+    return NetworkPolicyInfo(
+        id=data["id"],
+        slug=data["slug"],
+        created_at=datetime.fromisoformat(data["created_at"]),
+        policy=NetworkPolicy(
+            public_net=_public_net_policy_from_json(policy.get("public_net")),
+            private_net=_private_net_policy_from_json(policy.get("private_net")),
+        ),
     )
 
 

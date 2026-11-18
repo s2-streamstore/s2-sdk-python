@@ -8,10 +8,12 @@ from s2_sdk import (
     AccessTokenScope,
     BasinConfig,
     EnsureStatus,
+    NetworkPolicy,
     Operation,
     OperationGroupPermissions,
     Permission,
     PrefixMatch,
+    PublicNetCidrs,
     S2Basin,
     S2ServerError,
     StreamConfig,
@@ -317,6 +319,40 @@ class TestAccountOperations:
 
         finally:
             await s2.revoke_access_token(token_id)
+
+    # s2-lite does not implement network policies; its CI run excludes this marker.
+    @pytest.mark.access_tokens
+    async def test_network_policy_restricts_access_token(self, s2: S2, token_id: str):
+        slug = f"policy-{token_id}"
+        policy = NetworkPolicy(public_net=PublicNetCidrs(["203.0.113.0/24"]))
+        created = await s2.create_network_policy(slug, policy=policy)
+
+        try:
+            assert created.slug == slug
+            assert created.policy == policy
+            assert await s2.get_network_policy(slug) == created
+            assert [p async for p in s2.list_all_network_policies(prefix=slug)] == [
+                created
+            ]
+
+            token = await s2.issue_access_token(
+                id=token_id,
+                scope=AccessTokenScope(ops=[Operation.LIST_BASINS]),
+                network_policy=slug,
+            )
+            try:
+                page = await s2.list_access_tokens(prefix=token_id)
+                assert page.items[0].network_policy == created.id
+
+                # This client is outside the policy's documentation-only range.
+                async with S2(token, endpoints=s2._endpoints) as restricted:
+                    with pytest.raises(S2ServerError) as exc_info:
+                        await restricted.list_basins()
+                assert exc_info.value.status_code == 403
+            finally:
+                await s2.revoke_access_token(token_id)
+        finally:
+            await s2.delete_network_policy(slug)
 
     async def test_get_basin_config(self, s2: S2, basin: S2Basin):
         config = await s2.get_basin_config(basin.name)
