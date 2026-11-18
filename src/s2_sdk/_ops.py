@@ -23,6 +23,8 @@ from s2_sdk._mappers import (
     ensured_stream_info_from_json_and_headers,
     location_info_from_json,
     metric_set_from_json,
+    network_policy_info_from_json,
+    network_policy_to_json,
     read_batch_from_proto,
     read_limit_params,
     read_start_params,
@@ -457,6 +459,7 @@ class S2:
         scope: types.AccessTokenScope,
         expires_at: datetime | None = None,
         auto_prefix_streams: bool = False,
+        network_policy: str | None = None,
     ) -> str:
         """Issue an access token.
 
@@ -466,12 +469,17 @@ class S2:
             expires_at: Optional expiration time.
             auto_prefix_streams: Automatically prefix stream names during
                 creation and strip the prefix during listing.
+            network_policy: Slug or full ``<slug>.<nonce>`` reference of a network
+                policy to restrict the token by. A slug binds the token to the
+                policy that currently holds it.
 
         Returns:
             The access token string.
         """
         validate_access_token_id(id)
-        json = access_token_info_to_json(id, scope, auto_prefix_streams, expires_at)
+        json = access_token_info_to_json(
+            id, scope, auto_prefix_streams, expires_at, network_policy
+        )
         response = await self._retrier(
             self._account_client.unary_request,
             "POST",
@@ -558,6 +566,127 @@ class S2:
         """
         await self._retrier(
             self._account_client.unary_request, "DELETE", _access_token_path(id)
+        )
+
+    @fallible
+    async def list_network_policies(
+        self,
+        *,
+        prefix: str = "",
+        start_after: str = "",
+        limit: int = 1000,
+    ) -> types.Page[types.NetworkPolicyInfo]:
+        """List a page of network policies.
+
+        Args:
+            prefix: Filter to policies whose slug starts with this prefix.
+            start_after: List policies whose slug is lexicographically after this value.
+            limit: Maximum number of policies to return per page. Capped at 1000.
+
+        Returns:
+            A page of :class:`NetworkPolicyInfo`.
+
+        Tip:
+            See :meth:`list_all_network_policies` for automatic pagination.
+        """
+        params: dict[str, Any] = {}
+        if prefix:
+            params["prefix"] = prefix
+        if start_after:
+            params["start_after"] = start_after
+        if limit != 1000:
+            params["limit"] = limit
+
+        response = await self._retrier(
+            self._account_client.unary_request,
+            "GET",
+            "/v1/network-policies",
+            params=params,
+        )
+        data = response.json()
+        return types.Page(
+            items=[
+                network_policy_info_from_json(info) for info in data["network_policies"]
+            ],
+            has_more=data["has_more"],
+        )
+
+    @fallible
+    async def list_all_network_policies(
+        self,
+        *,
+        prefix: str = "",
+        start_after: str = "",
+    ) -> AsyncIterator[types.NetworkPolicyInfo]:
+        """List all network policies, paginating automatically.
+
+        Args:
+            prefix: Filter to policies whose slug starts with this prefix.
+            start_after: List policies whose slug is lexicographically after this value.
+
+        Yields:
+            :class:`NetworkPolicyInfo` for each policy.
+        """
+        while True:
+            page = await self.list_network_policies(
+                prefix=prefix, start_after=start_after
+            )
+            for info in page.items:
+                yield info
+            if not page.has_more or not page.items:
+                break
+            start_after = page.items[-1].slug
+
+    @fallible
+    async def create_network_policy(
+        self,
+        slug: str,
+        *,
+        policy: types.NetworkPolicy,
+    ) -> types.NetworkPolicyInfo:
+        """Create a network policy.
+
+        A network policy restricts where an access token may be used from. Bind one
+        when issuing a token with :meth:`issue_access_token`.
+
+        Args:
+            slug: Slug, unique to the account. Up to 96 characters of letters,
+                digits, ``-`` and ``_``.
+            policy: The restriction. Policies are immutable; create a new one to
+                change it.
+
+        Returns:
+            Information about the created policy.
+        """
+        response = await self._retrier(
+            self._account_client.unary_request,
+            "POST",
+            "/v1/network-policies",
+            json={"slug": slug, "policy": network_policy_to_json(policy)},
+        )
+        return network_policy_info_from_json(response.json())
+
+    @fallible
+    async def get_network_policy(self, id: str) -> types.NetworkPolicyInfo:
+        """Get a network policy.
+
+        Args:
+            id: Slug, or full ``<slug>.<nonce>`` reference.
+        """
+        response = await self._retrier(
+            self._account_client.unary_request, "GET", _network_policy_path(id)
+        )
+        return network_policy_info_from_json(response.json())
+
+    @fallible
+    async def delete_network_policy(self, id: str) -> None:
+        """Delete a network policy. It must not be bound to any access token.
+
+        Args:
+            id: Slug, or full ``<slug>.<nonce>`` reference.
+        """
+        await self._retrier(
+            self._account_client.unary_request, "DELETE", _network_policy_path(id)
         )
 
     @fallible
@@ -1294,6 +1423,10 @@ def _stream_path(name: str, suffix: str = "") -> str:
 
 def _access_token_path(id: str) -> str:
     return f"/v1/access-tokens/{_encode_path_segment(id)}"
+
+
+def _network_policy_path(id: str) -> str:
+    return f"/v1/network-policies/{_encode_path_segment(id)}"
 
 
 def _metrics_params(

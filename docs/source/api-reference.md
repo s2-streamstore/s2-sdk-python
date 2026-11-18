@@ -147,6 +147,18 @@
 .. autoclass:: AccessTokenInfo()
     :members:
 
+.. autoclass:: PublicNetCidrs
+    :members:
+
+.. autoclass:: AwsPrivateNetPolicy
+    :members:
+
+.. autoclass:: NetworkPolicy(public_net: PublicNetCidrs | Unknown | None = None, private_net: AwsPrivateNetPolicy | Unknown | None = None)
+    :members:
+
+.. autoclass:: NetworkPolicyInfo()
+    :members:
+
 .. autoenum:: MetricUnit
 
 .. autoenum:: TimeseriesInterval
