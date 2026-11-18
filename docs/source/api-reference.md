@@ -111,6 +111,9 @@
 .. autoclass:: LocationInfo()
     :members:
 
+.. autoclass:: AwsPrivateNet()
+    :members:
+
 .. autoclass:: BasinInfo()
     :members:
 
