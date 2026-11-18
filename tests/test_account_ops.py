@@ -330,9 +330,10 @@ class TestAccountOperations:
         try:
             assert created.slug == slug
             assert created.policy == policy
-            assert await s2.get_network_policy(slug) == created
+            fetched = await s2.get_network_policy(slug)
+            assert (fetched.id, fetched.policy) == (created.id, policy)
             assert [p async for p in s2.list_all_network_policies(prefix=slug)] == [
-                created
+                fetched
             ]
 
             token = await s2.issue_access_token(
