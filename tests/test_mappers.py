@@ -2,6 +2,7 @@ from s2_sdk import Operation, Unknown
 from s2_sdk._mappers import (
     access_token_info_from_json,
     access_token_info_to_json,
+    location_info_from_json,
     network_policy_info_from_json,
 )
 
@@ -34,3 +35,11 @@ def test_unknown_values_survive_parsing():
         }
     ).policy
     assert policy.public_net == Unknown("some-future-kind")
+    location = location_info_from_json(
+        {
+            "name": "gcp:us-east4",
+            "is_private": False,
+            "private_net": {"some-future-kind": {}},
+        }
+    )
+    assert location.private_net == Unknown("some-future-kind")

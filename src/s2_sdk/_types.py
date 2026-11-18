@@ -383,6 +383,14 @@ class Page(Generic[T]):
 
 
 @dataclass(slots=True)
+class AwsPrivateNet:
+    """AWS PrivateLink details for reaching a location over a private network."""
+
+    service_name: str
+    """Endpoint service name, for creating a VPC endpoint."""
+
+
+@dataclass(slots=True)
 class LocationInfo:
     """Logical location of a basin.
 
@@ -406,6 +414,14 @@ class LocationInfo:
 
     default_storage_class: str | None = None
     """Default storage class for this location."""
+
+    private_net: AwsPrivateNet | Unknown | None = None
+    """`Private networking <https://s2.dev/docs/platform/private-networking>`_
+    details for the account in this location, which can differ between accounts.
+
+    ``None`` until the account has a basin in this location, and when the
+    location cannot be reached over a private network.
+    """
 
 
 class TimestampingMode(_OpenEnum):
