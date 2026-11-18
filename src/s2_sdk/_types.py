@@ -452,6 +452,10 @@ class Operation(_OpenEnum):
     LIST_LOCATIONS = "list-locations"
     GET_DEFAULT_LOCATION = "get-default-location"
     SET_DEFAULT_LOCATION = "set-default-location"
+    LIST_NETWORK_POLICIES = "list-network-policies"
+    CREATE_NETWORK_POLICY = "create-network-policy"
+    GET_NETWORK_POLICY = "get-network-policy"
+    DELETE_NETWORK_POLICY = "delete-network-policy"
 
 
 class Permission(_DocEnum):
