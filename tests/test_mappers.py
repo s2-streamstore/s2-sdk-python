@@ -1,5 +1,9 @@
 from s2_sdk import Operation, Unknown
-from s2_sdk._mappers import access_token_info_from_json, access_token_info_to_json
+from s2_sdk._mappers import (
+    access_token_info_from_json,
+    access_token_info_to_json,
+    location_info_from_json,
+)
 
 
 def test_unknown_values_survive_parsing():
@@ -18,3 +22,11 @@ def test_unknown_values_survive_parsing():
     # An unknown operation is sent back by name; the service decides.
     body = access_token_info_to_json(info.id, info.scope, False, None)
     assert body["scope"]["ops"] == ["read", "some-future-op"]
+    location = location_info_from_json(
+        {
+            "name": "gcp:us-east4",
+            "is_private": False,
+            "private_net": {"some-future-kind": {}},
+        }
+    )
+    assert location.private_net == Unknown("some-future-kind")

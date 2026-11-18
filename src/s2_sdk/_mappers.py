@@ -10,6 +10,7 @@ from s2_sdk._types import (
     Accumulation,
     AppendAck,
     AppendInput,
+    AwsPrivateNet,
     BasinConfig,
     BasinInfo,
     Encryption,
@@ -90,7 +91,18 @@ def location_info_from_json(data: dict[str, Any]) -> LocationInfo:
         is_private=data["is_private"],
         storage_classes=data.get("storage_classes"),
         default_storage_class=data.get("default_storage_class"),
+        private_net=_private_net_from_json(data.get("private_net")),
     )
+
+
+def _private_net_from_json(
+    data: dict[str, Any] | None,
+) -> AwsPrivateNet | Unknown | None:
+    if data is None:
+        return None
+    if (aws := data.get("aws")) is not None:
+        return AwsPrivateNet(service_name=aws["service_name"])
+    return _unknown_kind(data)
 
 
 def stream_config_to_json(config: StreamConfig | None) -> dict[str, Any] | None:
