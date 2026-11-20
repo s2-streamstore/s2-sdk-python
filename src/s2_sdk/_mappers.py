@@ -105,7 +105,10 @@ def _private_net_from_json(
     if data is None:
         return None
     if (aws := data.get("aws")) is not None:
-        return AwsPrivateNet(service_name=aws["service_name"])
+        return AwsPrivateNet(
+            service_name=aws["service_name"],
+            private_dns_name=aws.get("private_dns_name"),
+        )
     return _unknown_kind(data)
 
 

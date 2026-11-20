@@ -389,6 +389,11 @@ class AwsPrivateNet:
     service_name: str
     """Endpoint service name, for creating a VPC endpoint."""
 
+    private_dns_name: str | None = None
+    """Private DNS name of the endpoint service. With private DNS enabled on the VPC
+    endpoint, it resolves to the endpoint, and can be used as the account endpoint so
+    that account requests also go over PrivateLink."""
+
 
 @dataclass(slots=True)
 class LocationInfo:
