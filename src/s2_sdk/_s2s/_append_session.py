@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
@@ -49,6 +49,13 @@ logger = logging.getLogger(__name__)
 _QUEUE_MAX_SIZE = 100
 
 
+class _NoInput(Enum):
+    VALUE = auto()
+
+
+_NO_INPUT = _NoInput.VALUE
+
+
 @dataclass(slots=True)
 class _InflightInput:
     num_records: int
@@ -63,6 +70,8 @@ class _InflightInput:
 class _AppendSessionState:
     inflight_inputs: deque[_InflightInput] = field(default_factory=deque)
     inputs_exhausted: bool = False
+    # An input taken off the queue by an attempt that ended before sending it.
+    dequeued_input: AppendInput | None | Literal[_NoInput.VALUE] = _NO_INPUT
 
 
 class _AttemptOutcome(Enum):
@@ -385,25 +394,17 @@ async def _body_gen(
     while True:
         if advised_reconnect.is_set():
             return
-        try:
-            inp = input_queue.get_nowait()
-        except asyncio.QueueEmpty:
-            input_task = asyncio.create_task(input_queue.get())
-            advised_reconnect_task = asyncio.create_task(advised_reconnect.wait())
+        if session_state.dequeued_input is not _NO_INPUT:
+            inp = session_state.dequeued_input
+            session_state.dequeued_input = _NO_INPUT
+        else:
             try:
-                await asyncio.wait(
-                    {input_task, advised_reconnect_task},
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                if not input_task.done():
+                inp = input_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                await _dequeue_input(session_state, input_queue, advised_reconnect)
+                if session_state.dequeued_input is _NO_INPUT:
                     return
-                inp = input_task.result()
-            finally:
-                input_task.cancel()
-                advised_reconnect_task.cancel()
-                await asyncio.gather(
-                    input_task, advised_reconnect_task, return_exceptions=True
-                )
+                continue
         if inp is None:
             await input_queue.put(None)
             session_state.inputs_exhausted = True
@@ -419,6 +420,40 @@ async def _body_gen(
         )
         ack_deadline_armed.set()
         yield encoded
+
+
+async def _dequeue_input(
+    session_state: _AppendSessionState,
+    input_queue: asyncio.Queue[AppendInput | None],
+    advised_reconnect: asyncio.Event,
+) -> None:
+    """Wait for the next input, or for a reconnect to be advised.
+
+    The input is handed over through ``session_state.dequeued_input`` rather
+    than returned: the attempt can be cancelled at any await after the input
+    has left the queue, and it must then still reach the next attempt.
+    """
+    input_task = asyncio.create_task(input_queue.get())
+    advised_reconnect_task = asyncio.create_task(advised_reconnect.wait())
+    try:
+        await asyncio.wait(
+            {input_task, advised_reconnect_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+    finally:
+        input_task.cancel()
+        advised_reconnect_task.cancel()
+        try:
+            await asyncio.gather(
+                input_task, advised_reconnect_task, return_exceptions=True
+            )
+        finally:
+            if (
+                input_task.done()
+                and not input_task.cancelled()
+                and input_task.exception() is None
+            ):
+                session_state.dequeued_input = input_task.result()
 
 
 def _encode_input(inp: AppendInput, compression: Compression) -> bytes:
