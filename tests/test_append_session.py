@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import patch
@@ -156,3 +157,65 @@ async def test_terminal_definite_error_preserves_prior_uncertainty(
         assert err.final_attempt_error is final
     else:
         assert err is final
+
+
+@pytest.mark.parametrize("ticks", range(1, 7))
+async def test_input_dequeued_by_cancelled_attempt_is_not_lost(ticks: int) -> None:
+    def decoded_messages(stream: AsyncIterator[bytes]) -> AsyncIterator[Message]:
+        return cast(AsyncIterator[Message], stream)
+
+    input_ready = asyncio.Event()
+    attempts = 0
+
+    class _Client:
+        @asynccontextmanager
+        async def streaming_request(
+            self,
+            *args: Any,
+            content: AsyncGenerator[bytes, None] | None = None,
+            **kwargs: Any,
+        ) -> AsyncGenerator[_Response, None]:
+            nonlocal attempts
+            assert content is not None
+            attempts += 1
+            if attempts == 1:
+                # Cancel the body sender at each point after the input it is
+                # waiting for becomes available, then fail the attempt.
+                send_task = asyncio.ensure_future(content.__anext__())
+                await asyncio.sleep(0)
+                input_ready.set()
+                for _ in range(ticks):
+                    await asyncio.sleep(0)
+                send_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await send_task
+                await content.aclose()
+                raise S2ServerError(
+                    code="rate_limited", message="rate_limited", status_code=429
+                )
+            async for _ in content:
+                pass
+            yield _Response((_ack(0),))
+
+    async def inputs() -> AsyncIterator[AppendInput]:
+        await input_ready.wait()
+        yield AppendInput(records=[Record(body=b"a")])
+
+    with (
+        patch.object(append_session, "read_messages", new=decoded_messages),
+        patch.object(append_session, "compute_backoff", new=lambda *a, **k: 0.0),
+    ):
+        async with asyncio.timeout(5):
+            acks = [
+                ack
+                async for ack in append_session.run_append_session(
+                    cast(HttpClient, _Client()),
+                    "stream",
+                    inputs(),
+                    Retry(max_attempts=2),
+                    Compression.NONE,
+                    ack_timeout=1.0,
+                )
+            ]
+
+    assert [ack.end.seq_num for ack in acks] == [1]
