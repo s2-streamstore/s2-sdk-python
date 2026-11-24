@@ -165,7 +165,9 @@ async def test_input_dequeued_by_cancelled_attempt_is_not_lost(ticks: int) -> No
         return cast(AsyncIterator[Message], stream)
 
     input_ready = asyncio.Event()
+    batches = [AppendInput(records=[Record(body=b)]) for b in (b"a", b"b")]
     attempts = 0
+    sent: list[bytes] = []
 
     class _Client:
         @asynccontextmanager
@@ -193,13 +195,13 @@ async def test_input_dequeued_by_cancelled_attempt_is_not_lost(ticks: int) -> No
                 raise S2ServerError(
                     code="rate_limited", message="rate_limited", status_code=429
                 )
-            async for _ in content:
-                pass
-            yield _Response((_ack(0),))
+            sent.extend([chunk async for chunk in content])
+            yield _Response((_ack(0), _ack(1)))
 
     async def inputs() -> AsyncIterator[AppendInput]:
         await input_ready.wait()
-        yield AppendInput(records=[Record(body=b"a")])
+        for batch in batches:
+            yield batch
 
     with (
         patch.object(append_session, "read_messages", new=decoded_messages),
@@ -218,4 +220,7 @@ async def test_input_dequeued_by_cancelled_attempt_is_not_lost(ticks: int) -> No
                 )
             ]
 
-    assert [ack.end.seq_num for ack in acks] == [1]
+    assert sent == [
+        append_session._encode_input(batch, Compression.NONE) for batch in batches
+    ]
+    assert [ack.end.seq_num for ack in acks] == [1, 2]

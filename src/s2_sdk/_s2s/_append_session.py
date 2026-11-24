@@ -5,7 +5,7 @@ from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple
 
 import s2_sdk._generated.s2.v1.s2_pb2 as pb
 from s2_sdk._client import HttpClient
@@ -47,7 +47,13 @@ from s2_sdk._types import (
 logger = logging.getLogger(__name__)
 
 _QUEUE_MAX_SIZE = 100
-_NO_INPUT: Any = object()
+
+
+class _NoInput(Enum):
+    VALUE = auto()
+
+
+_NO_INPUT = _NoInput.VALUE
 
 
 @dataclass(slots=True)
@@ -65,7 +71,7 @@ class _AppendSessionState:
     inflight_inputs: deque[_InflightInput] = field(default_factory=deque)
     inputs_exhausted: bool = False
     # An input taken off the queue by an attempt that ended before sending it.
-    dequeued_input: Any = _NO_INPUT
+    dequeued_input: AppendInput | None | Literal[_NoInput.VALUE] = _NO_INPUT
 
 
 class _AttemptOutcome(Enum):
