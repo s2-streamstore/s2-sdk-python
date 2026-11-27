@@ -833,14 +833,16 @@ class TestAutoCreateStreamConfig:
             with pytest.raises(ReadUnwrittenError):
                 await stream.read(start=SeqNum(0), stream_config=config)
         elif operation == "read_session":
-            with pytest.raises(ReadUnwrittenError):
+            # Older servers return 416 when starting at the tail without wait;
+            # newer servers emit a tail heartbeat and end cleanly with no batches.
+            with suppress(ReadUnwrittenError):
                 async with stream.read_session(
                     start=SeqNum(0),
                     limit=ReadLimit(count=1),
                     stream_config=config,
                 ) as session:
-                    async for _ in session:
-                        pass
+                    async for batch in session:
+                        raise AssertionError(f"unexpected batch: {batch}")
         else:
             raise AssertionError(f"unsupported operation: {operation}")
 
