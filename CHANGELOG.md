@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.14.0...v0.15.0) (2026-11-27)
+
+
+### Features
+
+* expose private DNS name for AWS PrivateLink on locations ([#160](https://github.com/s2-streamstore/s2-sdk-python/issues/160)) ([046cc83](https://github.com/s2-streamstore/s2-sdk-python/commit/046cc83b26be76100bed5d53c671a0c82bd17b0d))
+
+
+### Bug Fixes
+
+* keep an input dequeued by a cancelled append session attempt ([#162](https://github.com/s2-streamstore/s2-sdk-python/issues/162)) ([553eb17](https://github.com/s2-streamstore/s2-sdk-python/commit/553eb174f97de4438100358e114be992991ee442))
+
 ## [0.14.0](https://github.com/s2-streamstore/s2-sdk-python/compare/v0.13.1...v0.14.0) (2026-11-18)
 
 
